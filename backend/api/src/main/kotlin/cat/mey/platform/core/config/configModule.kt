@@ -8,9 +8,12 @@ import cat.mey.platform.core.db.data.config.DatabaseConfig
 import org.koin.dsl.module
 
 val configModule = module {
-    single<ConfigService> { ConfigService(get<CommandLine>().configDirectory) }
+    single<ConfigService> {
+        ConfigService(get<CommandLine>().configDirectory)
+    }
 
-    single<AuthConfig> { get<ConfigService>().auth }
-    single<DatabaseConfig> { get<ConfigService>().database }
-    single<ApiConfig> { get<ConfigService>().api }
+    // factory so each resolve can pick up a hot-reloaded value from ConfigService
+    factory<DatabaseConfig> { get<ConfigService>().config() }
+    factory<AuthConfig> { get<ConfigService>().config() }
+    factory<ApiConfig> { get<ConfigService>().config() }
 }
