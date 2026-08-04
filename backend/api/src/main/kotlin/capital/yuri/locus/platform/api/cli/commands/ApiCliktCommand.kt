@@ -1,10 +1,9 @@
 package capital.yuri.locus.platform.api.cli.commands
 
 import capital.yuri.locus.platform.api.auth.configureAuth
-import capital.yuri.locus.platform.api.createApiModule
 import capital.yuri.locus.platform.api.data.config.ApiConfig
+import capital.yuri.locus.platform.core.appModule
 import capital.yuri.locus.platform.core.auth.data.config.AuthConfig
-import capital.yuri.locus.platform.core.cli.CommandLine
 import capital.yuri.locus.platform.core.cli.commands.PlatformCliktCommand
 import capital.yuri.locus.platform.core.config.services.ConfigService
 import capital.yuri.locus.platform.core.db.data.config.DatabaseConfig
@@ -34,7 +33,7 @@ class ApiCliktCommand : PlatformCliktCommand("api") {
         embeddedServer(Netty, port = port, host = host) {
             install(Koin) {
                 slf4jLogger()
-                modules(createApiModule(CommandLine(configDirectory)))
+                modules(appModule(configDirectory))
             }
 
             install(WebSockets.Plugin)
@@ -48,7 +47,7 @@ class ApiCliktCommand : PlatformCliktCommand("api") {
 
             configureAuth()
 
-            val json = Json {ignoreUnknownKeys = true}
+            val json = Json { ignoreUnknownKeys = true }
 
             install(ContentNegotiation) {
                 json(json)

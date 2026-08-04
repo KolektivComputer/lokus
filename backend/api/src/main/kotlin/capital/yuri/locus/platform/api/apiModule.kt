@@ -1,15 +1,14 @@
 package capital.yuri.locus.platform.api
 
-import capital.yuri.locus.platform.core.auth.authModule
+import capital.yuri.locus.platform.core.appModule
 import capital.yuri.locus.platform.core.cli.CommandLine
-import capital.yuri.locus.platform.core.config.createConfigModule
-import capital.yuri.locus.platform.core.coreModule
-import org.koin.dsl.module
+import org.koin.core.module.Module
+import java.nio.file.Path
 
-fun createApiModule(commandLine: CommandLine) = module {
-    includes(
-        createConfigModule(commandLine),
-        coreModule,
-        authModule,
-    )
-}
+/** @deprecated Prefer [appModule] directly. */
+fun createApiModule(commandLine: CommandLine): Module =
+    appModule(commandLine.configDirectory)
+
+/** @deprecated Prefer [appModule] directly. */
+fun createApiModule(configDirectory: Path): Module =
+    appModule(configDirectory)
