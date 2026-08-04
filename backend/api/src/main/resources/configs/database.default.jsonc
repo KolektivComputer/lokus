@@ -1,0 +1,8 @@
+{
+  // Default database config (copied to CONFIG_ROOT/database.jsonc on first boot).
+  // Override credentials via OVERLAY_DB_USER / OVERLAY_DB_PASS env vars.
+  "jdbcUrl": "jdbc:postgresql://localhost:5432/overlay",
+  "driver": "PostgreSQL",
+  "username": "overlay",
+  "password": "overlay"
+}

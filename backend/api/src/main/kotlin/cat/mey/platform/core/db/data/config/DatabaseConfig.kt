@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
 @ConfigFile(name = "database", type = ConfigType.Root)
 @Serializable
 data class DatabaseConfig(
-    val jdbcUrl: String = "jdbc:postgresql://localhost:5432/thingy",
+    val jdbcUrl: String = "jdbc:postgresql://localhost:5432/overlay",
     var driver: DatabaseType = DatabaseType.PostgreSQL,
 
     @Environment("OVERLAY_DB_USER")

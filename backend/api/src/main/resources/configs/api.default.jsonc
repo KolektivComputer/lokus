@@ -1,0 +1,4 @@
+{
+  // Default API config (copied to CONFIG_ROOT/api.jsonc on first boot).
+  "baseUrl": "http://127.0.0.1:8080"
+}

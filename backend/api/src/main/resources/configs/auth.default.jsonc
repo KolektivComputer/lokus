@@ -1,0 +1,13 @@
+{
+  // Default auth config (copied to CONFIG_ROOT/auth.jsonc on first boot).
+  // Change jwt.secret before any real deployment.
+  "argon": {
+    "saltRounds": 10
+  },
+  "jwt": {
+    "secret": "change-me",
+    "issuer": "overlay",
+    "audience": "overlay",
+    "realm": "overlay"
+  }
+}
