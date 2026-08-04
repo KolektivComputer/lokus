@@ -1,12 +1,9 @@
-//import org.gradle.kotlin.dsl.detektPlugins
-
 plugins {
     kotlin("jvm") version "2.3.21"
     kotlin("plugin.serialization") version "2.3.21"
     application
 
     alias(libs.plugins.koin.compiler)
-//    alias(libs.plugins.detekt)
 }
 
 group = "capital.yuri"
@@ -29,8 +26,6 @@ dependencies {
     implementation(libs.argon2)
     implementation(libs.quartz)
     implementation(libs.clikt)
-
-//    detektPlugins(libs.detekt.ktlint.wrapper)
 }
 
 kotlin {
@@ -38,14 +33,15 @@ kotlin {
 }
 
 application {
-    mainClass.set("capital.yuri.locus.MainKt")
+    // Sources live under capital.yuri.locus.platform after the IDE rename
+    mainClass.set("capital.yuri.locus.platform.MainKt")
 }
 
-//detekt {
-//    toolVersion = "2.0.0-alpha.5"
-//    config.setFrom(file("../../config/detekt/detekt.yml"))
-//    buildUponDefaultConfig = true
-//}
+// createApiModule(CommandLine) + Quartz job resolution are dynamic; the compiler
+// plugin cannot statically prove those graphs and auto-enables strictSafety.
+koinCompiler {
+    strictSafety.set(false)
+}
 
 tasks.test {
     useJUnitPlatform()
