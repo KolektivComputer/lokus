@@ -5,15 +5,15 @@ import org.quartz.Job
 import org.quartz.Scheduler
 import org.quartz.spi.JobFactory
 import org.quartz.spi.TriggerFiredBundle
+import kotlin.reflect.KClass
 
 class KoinJobFactory :
     JobFactory,
     KoinComponent {
     override fun newJob(bundle: TriggerFiredBundle, scheduler: Scheduler): Job {
-        val jobDetail = bundle.jobDetail
-        val jobClass = jobDetail.jobClass
-
-        // Resolve the job instance directly from Koin
-        return getKoin().get(jobClass.kotlin) as Job
+        val jobClass: KClass<out Job> = bundle.jobDetail.jobClass.kotlin
+        // Dynamic class → instance; not a static get<Job>() the compiler can verify.
+        @Suppress("UNCHECKED_CAST")
+        return getKoin().get(clazz = jobClass) as Job
     }
 }
