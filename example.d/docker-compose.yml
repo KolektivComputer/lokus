@@ -35,10 +35,8 @@ services:
       LOCUS_DB_USER: locus
       LOCUS_DB_PASS: locus
     volumes:
-      - ./config:/config
-      - ./extensions:/extensions:ro
-    # locus api [<options>] <configdirectory>
-    command: ["api", "--host", "0.0.0.0", "--port", "8080", "/config"]
+      - ./config:/app/config
+      - ./extensions:/app/extensions:ro
 
 volumes:
   locus_example_pgdata:

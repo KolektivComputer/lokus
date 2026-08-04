@@ -7,7 +7,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 class Argon2Service : KoinComponent {
-    private val configService: ConfigService by inject()
+    private val configService by inject<ConfigService>()
     private val authConfig by configService.config<AuthConfig>()
 
     private val argon2 = Argon2Factory.create(

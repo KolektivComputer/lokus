@@ -34,6 +34,7 @@ kotlin {
 
 application {
     mainClass.set("capital.yuri.locus.platform.MainKt")
+    applicationName = "locus"
 }
 
 /*

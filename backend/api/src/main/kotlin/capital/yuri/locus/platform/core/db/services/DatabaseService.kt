@@ -7,7 +7,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 class DatabaseService : KoinComponent {
-    private val configService: ConfigService by inject()
+    private val configService by inject<ConfigService>()
     private val config by configService.config<DatabaseConfig>()
 
     fun connect() {

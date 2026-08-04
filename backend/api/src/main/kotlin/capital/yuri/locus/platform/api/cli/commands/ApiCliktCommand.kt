@@ -4,10 +4,12 @@ import capital.yuri.locus.platform.api.auth.configureAuth
 import capital.yuri.locus.platform.api.data.config.ApiConfig
 import capital.yuri.locus.platform.core.appModule
 import capital.yuri.locus.platform.core.auth.data.config.AuthConfig
-import capital.yuri.locus.platform.core.cli.commands.PlatformCliktCommand
+import capital.yuri.locus.platform.core.cli.commands.LocusCliktCommand
 import capital.yuri.locus.platform.core.config.services.ConfigService
 import capital.yuri.locus.platform.core.db.data.config.DatabaseConfig
 import capital.yuri.locus.platform.core.db.services.DatabaseService
+import com.github.ajalt.clikt.command.SuspendingCliktCommand
+import com.github.ajalt.clikt.core.requireObject
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
@@ -24,8 +26,11 @@ import org.koin.ktor.ext.get
 import org.koin.ktor.ext.inject
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
+import java.nio.file.Path
 
-class ApiCliktCommand : PlatformCliktCommand("api") {
+class ApiCliktCommand : SuspendingCliktCommand("api") {
+    val configDirectory by requireObject<Path>()
+
     val host: String by option(help = "Host name").default("127.0.0.1")
     val port: Int by option(help = "").int().default(8080)
 
@@ -54,7 +59,8 @@ class ApiCliktCommand : PlatformCliktCommand("api") {
             }
 
             routing {
-                val apiConfig by inject<ApiConfig>()
+                val configService by inject<ConfigService>()
+                val apiConfig by configService.config<ApiConfig>()
                 host(apiConfig.baseUrl.host) {
                     // central API routes
                 }

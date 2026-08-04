@@ -18,7 +18,7 @@ abstract class Extension : KoinComponent {
     abstract val id: ExtensionId
     abstract val name: String
 
-    protected val configService: ConfigService by inject()
+    protected val configService by inject<ConfigService>()
 
     /** Koin modules contributed by this extension (loaded with loadModules). */
     open fun modules(): List<Module> = emptyList()

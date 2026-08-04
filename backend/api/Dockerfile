@@ -23,15 +23,16 @@ WORKDIR /app
 
 RUN addgroup -S locus && adduser -S locus -G locus
 
-COPY --from=build /workspace/backend/api/build/install/api /app
+COPY --from=build /workspace/backend/api/build/install/locus /app
 
 # Config + extension jars mounted at runtime
-RUN mkdir -p /config /extensions && chown -R locus:locus /app /config /extensions
+RUN mkdir -p /app/config /app/extensions && chown -R locus:locus /app
 
 USER locus
 
 EXPOSE 8080
 
 # Usage: locus api [<options>] <configdirectory>
-ENTRYPOINT ["/app/bin/api"]
-CMD ["api", "--host", "0.0.0.0", "--port", "8080", "/config"]
+WORKDIR "/app"
+ENTRYPOINT ["/app/bin/locus"]
+CMD ["/app/config", "api", "--host", "0.0.0.0", "--port", "8080"]

@@ -4,6 +4,7 @@ package capital.yuri.locus.platform.api.auth
 
 import capital.yuri.locus.platform.core.auth.data.config.AuthConfig
 import capital.yuri.locus.platform.core.auth.services.SessionService
+import capital.yuri.locus.platform.core.config.services.ConfigService
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import io.ktor.server.application.Application
@@ -15,8 +16,10 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 fun Application.configureAuth() {
-    val config by inject<capital.yuri.locus.platform.core.auth.data.config.AuthConfig>()
-    val sessionService by inject<capital.yuri.locus.platform.core.auth.services.SessionService>()
+    val configService by inject<ConfigService>()
+    val config by configService.config<AuthConfig>()
+
+    val sessionService by inject<SessionService>()
 
     install(Authentication) {
         jwt("api-jwt") {
