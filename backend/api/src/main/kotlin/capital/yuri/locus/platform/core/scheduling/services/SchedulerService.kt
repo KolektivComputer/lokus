@@ -9,7 +9,6 @@ import org.koin.core.component.inject
 import org.quartz.Job
 import org.quartz.Scheduler
 import org.quartz.impl.StdSchedulerFactory
-import org.quartz.impl.jdbcjobstore.JobStoreSupport
 import org.quartz.impl.matchers.GroupMatcher
 import org.quartz.utils.ConnectionProvider
 import org.quartz.utils.DBConnectionManager
@@ -74,7 +73,6 @@ class SchedulerService : KoinComponent {
             setProperty("org.quartz.jobStore.tablePrefix", "QRTZ_")
             setProperty("org.quartz.jobStore.dataSource", dsName)
             setProperty("org.quartz.jobStore.isClustered", "false")
-            // Don't let Quartz open its own pool — we registered [dataSource] above.
         }
 
         createAndStart(props).also {
