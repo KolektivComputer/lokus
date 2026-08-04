@@ -43,55 +43,41 @@ koinCompiler {
 }
 
 // ---------------------------------------------------------------------------
-// version.json — embedded as /version.json on the classpath
+// version.json — classpath resource /version.json (tag + commit + dirty)
 // ---------------------------------------------------------------------------
+val generatedVersionDir = layout.buildDirectory.dir("generated/version")
+
 val generateVersionJson by tasks.registering {
-    val outputDir = layout.buildDirectory.dir("generated/version")
-    outputs.dir(outputDir)
+    outputs.dir(generatedVersionDir)
 
     doLast {
-        val dir = outputDir.get().asFile
+        val dir = generatedVersionDir.get().asFile
         dir.mkdirs()
 
-        fun git(vararg args: String): String? = try {
-            providers.exec {
-                commandLine("git", *args)
-                isIgnoreExitValue = true
-            }.standardOutput.asText.get().trim().ifBlank { null }
-                .takeIf {
-                    providers.exec {
-                        commandLine("git", *args)
-                        isIgnoreExitValue = true
-                    }.result.get().exitValue == 0
-                }
-        } catch (_: Exception) {
-            null
-        }
-
-        // Simpler portable capture
         fun runGit(vararg args: String): Pair<Int, String> {
             val pb = ProcessBuilder("git", *args)
                 .redirectErrorStream(true)
                 .directory(rootProject.projectDir)
             val proc = pb.start()
             val text = proc.inputStream.bufferedReader().readText().trim()
-            val code = proc.waitFor()
-            return code to text
+            return proc.waitFor() to text
         }
 
         val (_, commit) = runGit("rev-parse", "HEAD")
         val (tagCode, tagOut) = runGit("describe", "--tags", "--exact-match")
-        val tag = if (tagCode == 0) tagOut else null
+        val tag = tagOut.takeIf { tagCode == 0 && it.isNotBlank() }
         val (dirtyCode, dirtyOut) = runGit("status", "--porcelain")
         val dirty = dirtyCode == 0 && dirtyOut.isNotBlank()
+
+        fun esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
 
         val json = buildString {
             appendLine("{")
             append("  \"tag\": ")
-            if (tag != null) append("\"").append(tag).append("\"") else append("null")
+            if (tag != null) append('"').append(esc(tag)).append('"') else append("null")
             appendLine(",")
             append("  \"commit\": ")
-            if (commit.isNotBlank()) append("\"").append(commit).append("\"") else append("null")
+            if (commit.isNotBlank()) append('"').append(esc(commit)).append('"') else append("null")
             appendLine(",")
             append("  \"dirty\": ").append(dirty).appendLine()
             appendLine("}")
@@ -100,12 +86,8 @@ val generateVersionJson by tasks.registering {
     }
 }
 
-sourceSets {
-    main {
-        resources {
-            srcDir(generateVersionJson.map { it.outputs.files.asPath })
-        }
-    }
+sourceSets.named("main") {
+    resources.srcDir(generatedVersionDir)
 }
 
 tasks.named("processResources") {
