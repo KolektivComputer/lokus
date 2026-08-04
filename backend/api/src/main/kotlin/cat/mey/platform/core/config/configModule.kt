@@ -12,8 +12,8 @@ val configModule = module {
         ConfigService(get<CommandLine>().configDirectory)
     }
 
-    // factory so each resolve can pick up a hot-reloaded value from ConfigService
-    factory<DatabaseConfig> { get<ConfigService>().config() }
-    factory<AuthConfig> { get<ConfigService>().config() }
-    factory<ApiConfig> { get<ConfigService>().config() }
+    // Resolve through the node so hot-reloads are visible
+    factory<DatabaseConfig> { get<ConfigService>().config<DatabaseConfig>().value }
+    factory<AuthConfig> { get<ConfigService>().config<AuthConfig>().value }
+    factory<ApiConfig> { get<ConfigService>().config<ApiConfig>().value }
 }
