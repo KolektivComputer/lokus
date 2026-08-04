@@ -4,8 +4,8 @@
   },
   "jwt": {
     "secret": "dev-only-change-me",
-    "issuer": "thingy",
-    "audience": "thingy",
-    "realm": "thingy"
+    "issuer": "locus",
+    "audience": "locus",
+    "realm": "locus"
   }
 }

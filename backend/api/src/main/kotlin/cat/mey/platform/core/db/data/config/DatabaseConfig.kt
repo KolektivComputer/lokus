@@ -10,14 +10,14 @@ import kotlinx.serialization.Serializable
 @ConfigFile(name = "database", type = ConfigType.Root)
 @Serializable
 data class DatabaseConfig(
-    val jdbcUrl: String = "jdbc:postgresql://localhost:5432/thingy",
+    val jdbcUrl: String = "jdbc:postgresql://localhost:5432/locus",
     var driver: DatabaseType = DatabaseType.PostgreSQL,
 
-    @Environment("OVERLAY_DB_USER")
-    @JavaProperty("overlay.db.user")
+    @Environment("LOCUS_DB_USER")
+    @JavaProperty("locus.db.user")
     var username: String? = null,
 
-    @Environment("OVERLAY_DB_PASS")
-    @JavaProperty("overlay.db.pass")
+    @Environment("LOCUS_DB_PASS")
+    @JavaProperty("locus.db.pass")
     var password: String? = null,
 )

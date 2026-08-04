@@ -1,6 +1,6 @@
 package cat.mey.platform.core.db.services
 
-import cat.mey.core.db.data.config.DatabaseConfig
+import cat.mey.platform.core.db.data.config.DatabaseConfig
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject

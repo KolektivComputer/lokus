@@ -1,30 +1,29 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: thingy-postgres
+    container_name: locus-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: thingy
-      POSTGRES_PASSWORD: thingy
-      POSTGRES_DB: thingy
+      POSTGRES_USER: locus
+      POSTGRES_PASSWORD: locus
+      POSTGRES_DB: locus
     ports:
       - "5432:5432"
     volumes:
-      - thingy_pgdata:/var/lib/postgresql/data
+      - locus_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U thingy -d thingy"]
+      test: ["CMD-SHELL", "pg_isready -U locus -d locus"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  # Optional: run the API against the local DB.
-  # Build first: docker compose build api
-  # Config dir is mounted from ./docker/config
+  # Optional: API + DB together.
+  #   docker compose --profile full up --build
   api:
     build:
       context: .
       dockerfile: backend/api/Dockerfile
-    container_name: thingy-api
+    container_name: locus-api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -32,8 +31,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      OVERLAY_DB_USER: thingy
-      OVERLAY_DB_PASS: thingy
+      LOCUS_DB_USER: locus
+      LOCUS_DB_PASS: locus
     volumes:
       - ./docker/config:/config:ro
       - ./extensions:/extensions:ro
@@ -42,4 +41,4 @@ services:
       - full
 
 volumes:
-  thingy_pgdata:
+  locus_pgdata:
