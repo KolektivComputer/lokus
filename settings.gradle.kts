@@ -1,3 +1,3 @@
-rootProject.name = "mey.cat"
+rootProject.name = "locus"
 
 include(":backend:api")
