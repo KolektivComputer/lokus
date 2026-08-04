@@ -3,9 +3,11 @@ package cat.mey.platform.api.cli.commands
 import cat.mey.platform.api.auth.configureAuth
 import cat.mey.platform.api.createApiModule
 import cat.mey.platform.api.data.config.ApiConfig
+import cat.mey.platform.core.auth.data.config.AuthConfig
 import cat.mey.platform.core.cli.CommandLine
 import cat.mey.platform.core.cli.commands.PlatformCliktCommand
 import cat.mey.platform.core.config.services.ConfigService
+import cat.mey.platform.core.db.data.config.DatabaseConfig
 import cat.mey.platform.core.db.services.DatabaseService
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
@@ -37,7 +39,11 @@ class ApiCliktCommand : PlatformCliktCommand("api") {
 
             install(WebSockets.Plugin)
 
-            get<ConfigService>().loadConfigsStartup()
+            get<ConfigService>().loadConfigsStartup(
+                DatabaseConfig::class,
+                AuthConfig::class,
+                ApiConfig::class,
+            )
             get<DatabaseService>().connect()
 
             configureAuth()

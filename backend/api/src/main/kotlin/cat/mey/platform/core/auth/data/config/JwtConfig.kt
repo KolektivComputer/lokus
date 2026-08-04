@@ -4,8 +4,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class JwtConfig(
-    val secret: String,
-    val issuer: String,
-    val audience: String,
-    val realm: String,
+    val secret: String = "change-me",
+    val issuer: String = "thingy",
+    val audience: String = "thingy",
+    val realm: String = "thingy",
 )

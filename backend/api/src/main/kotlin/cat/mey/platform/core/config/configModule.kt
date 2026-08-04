@@ -8,9 +8,12 @@ import cat.mey.platform.core.db.data.config.DatabaseConfig
 import org.koin.dsl.module
 
 val configModule = module {
-    single<ConfigService> { ConfigService(get<CommandLine>().configDirectory) }
+    single<ConfigService> {
+        ConfigService(get<CommandLine>().configDirectory)
+    }
 
-    single<AuthConfig> { get<ConfigService>().auth }
-    single<DatabaseConfig> { get<ConfigService>().database }
-    single<ApiConfig> { get<ConfigService>().api }
+    // Resolve through the node so hot-reloads are visible
+    factory<DatabaseConfig> { get<ConfigService>().config<DatabaseConfig>().value }
+    factory<AuthConfig> { get<ConfigService>().config<AuthConfig>().value }
+    factory<ApiConfig> { get<ConfigService>().config<ApiConfig>().value }
 }

@@ -4,5 +4,5 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ArgonConfig(
-    val saltRounds: Int
+    val saltRounds: Int = 10,
 )
