@@ -1,0 +1,12 @@
+.git
+.idea
+**/.gradle
+**/build
+**/node_modules
+web
+pnpm-lock.yaml
+pnpm-workspace.yaml
+**/*.iml
+**/.DS_Store
+docker/config
+extensions

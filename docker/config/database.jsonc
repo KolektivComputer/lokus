@@ -1,0 +1,8 @@
+{
+  // Used when running the API via docker compose (profile: full).
+  // Host "postgres" is the compose service name.
+  "jdbcUrl": "jdbc:postgresql://postgres:5432/thingy",
+  "driver": "PostgreSQL",
+  "username": "thingy",
+  "password": "thingy"
+}
