@@ -1,0 +1,44 @@
+name: locus-example
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: locus-example-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: locus
+      POSTGRES_PASSWORD: locus
+      POSTGRES_DB: locus
+    ports:
+      - "5432:5432"
+    volumes:
+      - locus_example_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U locus -d locus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      # Repo root (parent of example.d) so backend/api/Dockerfile paths resolve
+      context: ..
+      dockerfile: backend/api/Dockerfile
+    container_name: locus-example-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      LOCUS_DB_USER: locus
+      LOCUS_DB_PASS: locus
+    volumes:
+      - ./config:/config
+      - ./extensions:/extensions:ro
+    # PlatformCliktCommand: <configDir> <subcommand> …
+    command: ["/config", "api", "--host", "0.0.0.0", "--port", "8080"]
+
+volumes:
+  locus_example_pgdata:
