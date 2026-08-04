@@ -33,14 +33,22 @@ kotlin {
 }
 
 application {
-    // Sources live under capital.yuri.locus.platform after the IDE rename
     mainClass.set("capital.yuri.locus.platform.MainKt")
 }
 
-// createApiModule(CommandLine) + Quartz job resolution are dynamic; the compiler
-// plugin cannot statically prove those graphs and auto-enables strictSafety.
+/*
+ * Koin compiler plugin compile-time safety (A2/A3/A4).
+ *
+ * compileSafety — validates inject/get against declared modules (KOIN-D002).
+ *   Must be false while ConfigService is wired via appModule(Path) and Quartz
+ *   resolves Job by Class at runtime — those definitions are not static DSL.
+ *
+ * strictSafety — only forces the aggregator safety pass to re-run every build
+ *   (IC workaround). It does NOT disable KOIN-D002.
+ */
 koinCompiler {
-    strictSafety.set(false)
+    compileSafety = false
+    strictSafety = false
 }
 
 tasks.test {
