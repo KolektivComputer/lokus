@@ -1,0 +1,7 @@
+{
+  // Compose service hostname is "postgres".
+  "jdbcUrl": "jdbc:postgresql://postgres:5432/locus",
+  "driver": "PostgreSQL",
+  "username": "locus",
+  "password": "locus"
+}
