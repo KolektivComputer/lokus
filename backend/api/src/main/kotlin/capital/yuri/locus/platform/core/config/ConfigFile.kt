@@ -14,7 +14,7 @@ annotation class ConfigFile(
     val type: ConfigType = ConfigType.Root,
     /**
      * Only used when [type] is [ConfigType.Extension].
-     * When empty, callers must pass extensionId to [cat.mey.platform.core.config.services.ConfigService.config].
+     * When empty, callers must pass extensionId to [ConfigService.config].
      */
     val extensionId: String = "",
 )

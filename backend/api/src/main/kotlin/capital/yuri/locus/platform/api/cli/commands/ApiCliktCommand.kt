@@ -48,7 +48,7 @@ class ApiCliktCommand : PlatformCliktCommand("api") {
 
             configureAuth()
 
-            val json = get<Json>()
+            val json = Json {ignoreUnknownKeys = true}
 
             install(ContentNegotiation) {
                 json(json)

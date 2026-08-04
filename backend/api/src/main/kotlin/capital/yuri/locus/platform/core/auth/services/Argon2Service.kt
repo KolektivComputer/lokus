@@ -1,10 +1,15 @@
 package capital.yuri.locus.platform.core.auth.services
 
 import capital.yuri.locus.platform.core.auth.data.config.AuthConfig
+import capital.yuri.locus.platform.core.config.services.ConfigService
 import de.mkammerer.argon2.Argon2Factory
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
-class Argon2Service(private val authConfig: AuthConfig) : KoinComponent {
+class Argon2Service : KoinComponent {
+    private val configService: ConfigService by inject()
+    private val authConfig by configService.config<AuthConfig>()
+
     private val argon2 = Argon2Factory.create(
         Argon2Factory.Argon2Types.ARGON2i,
         128,
