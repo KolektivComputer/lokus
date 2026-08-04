@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.koin.compiler)
 }
 
-group = "dev.lizainslie"
+group = "capital.yuri"
 version = "0.0.1"
 
 repositories {
@@ -34,7 +34,7 @@ kotlin {
 }
 
 application {
-    mainClass.set("cat.mey.platform.MainKt")
+    mainClass.set("capital.yuri.locus.MainKt")
 }
 
 detekt {
