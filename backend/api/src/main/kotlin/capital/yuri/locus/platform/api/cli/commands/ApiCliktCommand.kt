@@ -8,6 +8,7 @@ import capital.yuri.locus.platform.core.auth.data.config.AuthConfig
 import capital.yuri.locus.platform.core.config.services.ConfigService
 import capital.yuri.locus.platform.core.db.data.config.DatabaseConfig
 import capital.yuri.locus.platform.core.db.services.DatabaseService
+import capital.yuri.locus.platform.core.scheduling.services.SchedulerService
 import com.github.ajalt.clikt.command.SuspendingCliktCommand
 import com.github.ajalt.clikt.core.requireObject
 import com.github.ajalt.clikt.parameters.options.default
@@ -49,6 +50,8 @@ class ApiCliktCommand : SuspendingCliktCommand("api") {
                 ApiConfig::class,
             )
             get<DatabaseService>().connect()
+            // JDBC job store needs the shared Hikari pool
+            get<SchedulerService>().start()
 
             configureAuth()
 
@@ -62,7 +65,6 @@ class ApiCliktCommand : SuspendingCliktCommand("api") {
             }
 
             routing {
-                // Public health / stats (not host-scoped)
                 statusRoutes()
 
                 val configService by inject<ConfigService>()
