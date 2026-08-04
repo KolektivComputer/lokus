@@ -7,7 +7,7 @@ import capital.yuri.locus.platform.core.extension.extensionModule
 import capital.yuri.locus.platform.core.scheduling.schedulingModule
 import org.koin.dsl.module
 
-/** Shared platform features. Loaded by [appModule] after config is bound. */
+/** Shared platform features. Loaded by [appModule]. */
 val coreModule = module {
     includes(
         dbModule,
