@@ -37,19 +37,79 @@ application {
     applicationName = "locus"
 }
 
-/*
- * Koin compiler plugin compile-time safety (A2/A3/A4).
- *
- * compileSafety — validates inject/get against declared modules (KOIN-D002).
- *   Must be false while ConfigService is wired via appModule(Path) and Quartz
- *   resolves Job by Class at runtime — those definitions are not static DSL.
- *
- * strictSafety — only forces the aggregator safety pass to re-run every build
- *   (IC workaround). It does NOT disable KOIN-D002.
- */
 koinCompiler {
     compileSafety = false
     strictSafety = false
+}
+
+// ---------------------------------------------------------------------------
+// version.json — embedded as /version.json on the classpath
+// ---------------------------------------------------------------------------
+val generateVersionJson by tasks.registering {
+    val outputDir = layout.buildDirectory.dir("generated/version")
+    outputs.dir(outputDir)
+
+    doLast {
+        val dir = outputDir.get().asFile
+        dir.mkdirs()
+
+        fun git(vararg args: String): String? = try {
+            providers.exec {
+                commandLine("git", *args)
+                isIgnoreExitValue = true
+            }.standardOutput.asText.get().trim().ifBlank { null }
+                .takeIf {
+                    providers.exec {
+                        commandLine("git", *args)
+                        isIgnoreExitValue = true
+                    }.result.get().exitValue == 0
+                }
+        } catch (_: Exception) {
+            null
+        }
+
+        // Simpler portable capture
+        fun runGit(vararg args: String): Pair<Int, String> {
+            val pb = ProcessBuilder("git", *args)
+                .redirectErrorStream(true)
+                .directory(rootProject.projectDir)
+            val proc = pb.start()
+            val text = proc.inputStream.bufferedReader().readText().trim()
+            val code = proc.waitFor()
+            return code to text
+        }
+
+        val (_, commit) = runGit("rev-parse", "HEAD")
+        val (tagCode, tagOut) = runGit("describe", "--tags", "--exact-match")
+        val tag = if (tagCode == 0) tagOut else null
+        val (dirtyCode, dirtyOut) = runGit("status", "--porcelain")
+        val dirty = dirtyCode == 0 && dirtyOut.isNotBlank()
+
+        val json = buildString {
+            appendLine("{")
+            append("  \"tag\": ")
+            if (tag != null) append("\"").append(tag).append("\"") else append("null")
+            appendLine(",")
+            append("  \"commit\": ")
+            if (commit.isNotBlank()) append("\"").append(commit).append("\"") else append("null")
+            appendLine(",")
+            append("  \"dirty\": ").append(dirty).appendLine()
+            appendLine("}")
+        }
+        dir.resolve("version.json").writeText(json)
+    }
+}
+
+sourceSets {
+    main {
+        resources {
+            srcDir(generateVersionJson.map { it.outputs.files.asPath })
+        }
+    }
+}
+
+tasks.named("processResources") {
+    dependsOn(generateVersionJson)
 }
 
 tasks.test {

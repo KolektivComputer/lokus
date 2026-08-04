@@ -5,9 +5,9 @@ import capital.yuri.locus.platform.core.stats.data.types.results.GetStatGroupRes
 
 /**
  * SPI for core + extension statistic groups.
- * Extensions register via [StatsService.register].
+ * Extensions register via [capital.yuri.locus.platform.core.stats.services.StatsService.register].
  */
-fun interface StatisticGroupProvider {
+interface StatisticGroupProvider {
     val id: StatisticGroupId
 
     suspend fun collect(): GetStatGroupResult

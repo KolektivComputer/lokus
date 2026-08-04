@@ -1,21 +1,19 @@
 package capital.yuri.locus.platform.core.stats.services
 
+import capital.yuri.locus.platform.core.scheduling.services.SchedulerService
 import capital.yuri.locus.platform.core.stats.StatisticGroupProvider
 import capital.yuri.locus.platform.core.stats.data.types.StatisticGroupId
 import capital.yuri.locus.platform.core.stats.data.types.groups.BuildVersion
 import capital.yuri.locus.platform.core.stats.data.types.groups.DatabaseStatGroup
 import capital.yuri.locus.platform.core.stats.data.types.groups.InstanceStatGroup
 import capital.yuri.locus.platform.core.stats.data.types.groups.RuntimeStatGroup
-import capital.yuri.locus.platform.core.stats.data.types.groups.SchedulerStatGroup
 import capital.yuri.locus.platform.core.stats.data.types.results.GetStatGroupResult
-import capital.yuri.locus.platform.core.scheduling.services.SchedulerService
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import org.slf4j.LoggerFactory
 import java.lang.management.ManagementFactory
-import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -30,10 +28,10 @@ class StatsService : KoinComponent {
     private val buildVersion: BuildVersion? by lazy { loadBuildVersion() }
 
     init {
-        register(instanceProvider())
-        register(runtimeProvider())
-        register(databaseProvider())
-        register(schedulerProvider())
+        register(InstanceGroup())
+        register(RuntimeGroup())
+        register(DatabaseGroup())
+        register(SchedulerGroup())
     }
 
     fun register(provider: StatisticGroupProvider) {
@@ -61,58 +59,67 @@ class StatsService : KoinComponent {
     suspend fun getAll(): Map<String, GetStatGroupResult> =
         listGroupIds().associate { it.value to getGroup(it) }
 
-    // ------------------------------------------------------------------------- 
-    // Core providers
-    // -------------------------------------------------------------------------
+    // ---- core groups --------------------------------------------------------
 
-    private fun instanceProvider() = StatisticGroupProvider {
-        val now = Clock.System.now()
-        GetStatGroupResult.SuccessInstance(
-            data = InstanceStatGroup(
-                uptimeSeconds = (now - startedAt).inWholeSeconds,
-                startedAtEpochMs = startedAt.toEpochMilliseconds(),
-                version = buildVersion,
-            ),
-        )
-    }.withId(StatisticGroupId.Instance)
+    private inner class InstanceGroup : StatisticGroupProvider {
+        override val id = StatisticGroupId.Instance
 
-    private fun runtimeProvider() = StatisticGroupProvider {
-        val heap = ManagementFactory.getMemoryMXBean().heapMemoryUsage
-        val threads = ManagementFactory.getThreadMXBean()
-        val rt = ManagementFactory.getRuntimeMXBean()
-        GetStatGroupResult.SuccessRuntime(
-            data = RuntimeStatGroup(
-                heapUsedBytes = heap.used,
-                heapMaxBytes = heap.max,
-                heapCommittedBytes = heap.committed,
-                threadCount = threads.threadCount,
-                daemonThreadCount = threads.daemonThreadCount,
-                peakThreadCount = threads.peakThreadCount,
-                activeCoroutines = probeActiveCoroutines(),
-                availableProcessors = Runtime.getRuntime().availableProcessors(),
-                jvmUptimeMs = rt.uptime,
-            ),
-        )
-    }.withId(StatisticGroupId.Runtime)
+        override suspend fun collect(): GetStatGroupResult {
+            val now = Clock.System.now()
+            return GetStatGroupResult.SuccessInstance(
+                data = InstanceStatGroup(
+                    uptimeSeconds = (now - startedAt).inWholeSeconds,
+                    startedAtEpochMs = startedAt.toEpochMilliseconds(),
+                    version = buildVersion,
+                ),
+            )
+        }
+    }
 
-    private fun databaseProvider() = StatisticGroupProvider {
-        GetStatGroupResult.SuccessDatabase(data = pingDatabase())
-    }.withId(StatisticGroupId.Database)
+    private inner class RuntimeGroup : StatisticGroupProvider {
+        override val id = StatisticGroupId.Runtime
 
-    private fun schedulerProvider() = StatisticGroupProvider {
-        GetStatGroupResult.SuccessScheduler(data = schedulerService.stats())
-    }.withId(StatisticGroupId.Scheduler)
+        override suspend fun collect(): GetStatGroupResult {
+            val heap = ManagementFactory.getMemoryMXBean().heapMemoryUsage
+            val threads = ManagementFactory.getThreadMXBean()
+            val rt = ManagementFactory.getRuntimeMXBean()
+            return GetStatGroupResult.SuccessRuntime(
+                data = RuntimeStatGroup(
+                    heapUsedBytes = heap.used,
+                    heapMaxBytes = heap.max,
+                    heapCommittedBytes = heap.committed,
+                    threadCount = threads.threadCount,
+                    daemonThreadCount = threads.daemonThreadCount,
+                    peakThreadCount = threads.peakThreadCount,
+                    activeCoroutines = probeActiveCoroutines(),
+                    availableProcessors = Runtime.getRuntime().availableProcessors(),
+                    jvmUptimeMs = rt.uptime,
+                ),
+            )
+        }
+    }
+
+    private inner class DatabaseGroup : StatisticGroupProvider {
+        override val id = StatisticGroupId.Database
+
+        override suspend fun collect(): GetStatGroupResult =
+            GetStatGroupResult.SuccessDatabase(data = pingDatabase())
+    }
+
+    private inner class SchedulerGroup : StatisticGroupProvider {
+        override val id = StatisticGroupId.Scheduler
+
+        override suspend fun collect(): GetStatGroupResult =
+            GetStatGroupResult.SuccessScheduler(data = schedulerService.stats())
+    }
 
     private fun pingDatabase(): DatabaseStatGroup {
         val start = System.nanoTime()
         return try {
             transaction {
-                exec("SELECT 1") { rs ->
-                    rs.next()
-                }
+                exec("SELECT 1") { rs -> rs.next() }
             }
-            val latencyMs = (System.nanoTime() - start) / 1_000_000
-            DatabaseStatGroup.Ok(latencyMs = latencyMs)
+            DatabaseStatGroup.Ok(latencyMs = (System.nanoTime() - start) / 1_000_000)
         } catch (e: Exception) {
             DatabaseStatGroup.Unavailable(message = e.message ?: "database unreachable")
         }
@@ -130,23 +137,11 @@ class StatsService : KoinComponent {
     private fun loadBuildVersion(): BuildVersion? = try {
         val stream = StatsService::class.java.getResourceAsStream("/version.json") ?: return null
         stream.use {
-            Json { ignoreUnknownKeys = true }.decodeFromString(BuildVersion.serializer(), it.bufferedReader().readText())
+            Json { ignoreUnknownKeys = true }
+                .decodeFromString(BuildVersion.serializer(), it.bufferedReader().readText())
         }
     } catch (e: Exception) {
         logger.debug("No version.json: {}", e.message)
         null
     }
-
-    private fun StatisticGroupProvider.withId(id: StatisticGroupId): StatisticGroupProvider =
-        object : StatisticGroupProvider {
-            override val id: StatisticGroupId = id
-            override suspend fun collect(): GetStatGroupResult = this@withId.collect()
-        }
 }
-
-// Allow fun-interface style with explicit id via extension above
-private fun StatisticGroupProvider(block: suspend () -> GetStatGroupResult) =
-    object : StatisticGroupProvider {
-        override val id: StatisticGroupId = StatisticGroupId("_")
-        override suspend fun collect(): GetStatGroupResult = block()
-    }

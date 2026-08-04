@@ -2,9 +2,9 @@ package capital.yuri.locus.platform.api.cli.commands
 
 import capital.yuri.locus.platform.api.auth.configureAuth
 import capital.yuri.locus.platform.api.data.config.ApiConfig
+import capital.yuri.locus.platform.api.routes.statusRoutes
 import capital.yuri.locus.platform.core.appModule
 import capital.yuri.locus.platform.core.auth.data.config.AuthConfig
-import capital.yuri.locus.platform.core.cli.commands.LocusCliktCommand
 import capital.yuri.locus.platform.core.config.services.ConfigService
 import capital.yuri.locus.platform.core.db.data.config.DatabaseConfig
 import capital.yuri.locus.platform.core.db.services.DatabaseService
@@ -52,13 +52,19 @@ class ApiCliktCommand : SuspendingCliktCommand("api") {
 
             configureAuth()
 
-            val json = Json { ignoreUnknownKeys = true }
+            val json = Json {
+                ignoreUnknownKeys = true
+                classDiscriminator = "type"
+            }
 
             install(ContentNegotiation) {
                 json(json)
             }
 
             routing {
+                // Public health / stats (not host-scoped)
+                statusRoutes()
+
                 val configService by inject<ConfigService>()
                 val apiConfig by configService.config<ApiConfig>()
                 host(apiConfig.baseUrl.host) {
