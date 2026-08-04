@@ -37,8 +37,8 @@ services:
     volumes:
       - ./config:/config
       - ./extensions:/extensions:ro
-    # PlatformCliktCommand: <configDir> <subcommand> …
-    command: ["/config", "api", "--host", "0.0.0.0", "--port", "8080"]
+    # locus api [<options>] <configdirectory>
+    command: ["api", "--host", "0.0.0.0", "--port", "8080", "/config"]
 
 volumes:
   locus_example_pgdata:

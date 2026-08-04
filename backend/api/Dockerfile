@@ -15,7 +15,7 @@ RUN ./gradlew :backend:api:dependencies --no-daemon || true
 
 # Sources + build installDist
 COPY backend/api/src ./backend/api/src
-RUN ./gradlew :backend:api:installDist --no-daemon -x test -x detekt
+RUN ./gradlew :backend:api:installDist --no-daemon -x test
 
 # ---- runtime ----
 FROM eclipse-temurin:21-jre-alpine
@@ -32,6 +32,6 @@ USER locus
 
 EXPOSE 8080
 
-# PlatformCliktCommand requires config dir as first arg, then subcommand.
+# Usage: locus api [<options>] <configdirectory>
 ENTRYPOINT ["/app/bin/api"]
-CMD ["/config", "api", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["api", "--host", "0.0.0.0", "--port", "8080", "/config"]
