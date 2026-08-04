@@ -4,11 +4,17 @@ import cat.mey.platform.core.config.ConfigFile
 import cat.mey.platform.core.config.ConfigType
 import cat.mey.platform.core.config.Environment
 import cat.mey.platform.core.config.JavaProperty
+import cat.mey.platform.core.config.data.types.ConfigNode
+import cat.mey.platform.core.config.data.types.ExtensionConfigNode
+import cat.mey.platform.core.config.data.types.RootConfigNode
 import cat.mey.platform.core.config.data.types.results.ConfigLoadResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.io.IOException
 import kotlinx.serialization.json.Json
@@ -16,12 +22,13 @@ import kotlinx.serialization.serializer
 import org.koin.core.component.KoinComponent
 import org.slf4j.LoggerFactory
 import java.io.File
+import java.nio.file.ClosedWatchServiceException
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardWatchEventKinds
 import java.nio.file.WatchKey
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.io.path.div
 import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
@@ -31,7 +38,7 @@ import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.jvm.javaField
 
 /**
- * Annotation-driven config loader with optional file watching.
+ * Annotation-driven config loader with file watching.
  *
  * Usage:
  * ```
@@ -42,6 +49,9 @@ import kotlin.reflect.jvm.javaField
  * Paths:
  * - Root:      CONFIG_ROOT/<name>.jsonc
  * - Extension: CONFIG_ROOT/ext/<extensionId>/<name>.jsonc
+ *
+ * Values live in [RootConfigNode] / [ExtensionConfigNode] behind [StateFlow],
+ * so concurrent readers and reloaders stay coroutine-safe.
  */
 class ConfigService(
     private val directory: Path,
@@ -55,20 +65,14 @@ class ConfigService(
     private val logger = LoggerFactory.getLogger(ConfigService::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private data class ConfigKey(
-        val kClass: KClass<*>,
-        val extensionId: String?,
-    )
+    /** All registered nodes (root + extension). */
+    private val nodes = CopyOnWriteArrayList<ConfigNode<*>>()
 
-    private class ConfigNode<T : Any>(
-        @Volatile var value: T,
-        val file: File,
-        val kClass: KClass<T>,
-    )
+    /** Guards get-or-create so two coroutines don't double-register the same config. */
+    private val registryMutex = Mutex()
 
-    private val nodes = ConcurrentHashMap<ConfigKey, ConfigNode<*>>()
     private val watchService = FileSystems.getDefault().newWatchService()
-    private val watchedDirs = ConcurrentHashMap.newKeySet<Path>()
+    private val watchedDirs = java.util.concurrent.ConcurrentHashMap.newKeySet<Path>()
 
     init {
         scope.launch { runWatcher() }
@@ -78,7 +82,7 @@ class ConfigService(
      * Resolve (or create + watch) a config of type [T].
      *
      * @param extensionId required for [ConfigType.Extension] when not set on the annotation
-     * @param writeDefault if true and file is missing, try to copy a classpath default
+     * @param writeDefault if true and file is missing, try classpath default / data-class defaults
      */
     inline fun <reified T : Any> config(
         extensionId: String? = null,
@@ -90,62 +94,138 @@ class ConfigService(
         extensionId: String? = null,
         writeDefault: Boolean = true,
     ): T {
+        // Non-suspend Koin factories call this; get-or-create is synchronized via runBlocking + mutex.
+        return runBlocking {
+            getOrCreateNode(kClass, extensionId, writeDefault).value
+        }
+    }
+
+    /** Same as [config] but returns the live [StateFlow] for collectors. */
+    inline fun <reified T : Any> configState(
+        extensionId: String? = null,
+        writeDefault: Boolean = true,
+    ) = configState(T::class, extensionId, writeDefault)
+
+    fun <T : Any> configState(
+        kClass: KClass<T>,
+        extensionId: String? = null,
+        writeDefault: Boolean = true,
+    ) = runBlocking {
+        getOrCreateNode(kClass, extensionId, writeDefault).state
+    }
+
+    /** Force reload of a known config (or no-op if not registered yet). */
+    suspend fun <T : Any> reload(kClass: KClass<T>, extensionId: String? = null): T? {
+        val node = findNode(kClass, extensionId) ?: return null
+        val result = decodeFile(kClass, node.file)
+        if (result is ConfigLoadResult.Loaded<*>) {
+            @Suppress("UNCHECKED_CAST")
+            val updated = applyOverlays(kClass, result.data as T)
+            node.update(updated)
+            logger.info("Reloaded config ${kClass.simpleName} from ${node.file.absolutePath}")
+            return updated
+        }
+        return node.value
+    }
+
+    /** Startup helper: register root configs so defaults exist before the rest of the app boots. */
+    suspend fun loadConfigsStartup(vararg classes: KClass<*>) {
+        logger.info("Loading configs from ${directory.toAbsolutePath()}")
+        classes.forEach { kClass ->
+            @Suppress("UNCHECKED_CAST")
+            getOrCreateNode(kClass as KClass<Any>, extensionId = null, writeDefault = true)
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Registry / resolution
+    // -------------------------------------------------------------------------
+
+    private suspend fun <T : Any> getOrCreateNode(
+        kClass: KClass<T>,
+        extensionId: String?,
+        writeDefault: Boolean,
+    ): ConfigNode<T> {
         val annotation = kClass.findAnnotation<ConfigFile>()
             ?: error("${kClass.qualifiedName} is missing @ConfigFile")
 
-        val resolvedExtensionId = when (annotation.type) {
+        val resolvedExtensionId = resolveExtensionId(kClass, annotation, extensionId)
+
+        registryMutex.withLock {
+            findNode(kClass, resolvedExtensionId)?.let { return it }
+
+            val file = resolveFile(annotation, resolvedExtensionId)
+            ensureParent(file)
+
+            val loaded = loadOrDefault(kClass, file, annotation, resolvedExtensionId, writeDefault)
+
+            val node: ConfigNode<T> = when (annotation.type) {
+                ConfigType.Root -> RootConfigNode(
+                    kClass = kClass,
+                    file = file,
+                    initial = loaded,
+                )
+                ConfigType.Extension -> ExtensionConfigNode(
+                    extensionId = requireNotNull(resolvedExtensionId),
+                    kClass = kClass,
+                    file = file,
+                    initial = loaded,
+                )
+            }
+
+            nodes += node
+            file.toPath().parent?.let { watchDirectory(it) }
+
+            return node
+        }
+    }
+
+    /**
+     * Lookup existing node.
+     *
+     * If an extension id is present (from argument or annotation), only
+     * [ExtensionConfigNode]s with that id are considered; otherwise only
+     * [RootConfigNode]s.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun <T : Any> findNode(
+        kClass: KClass<T>,
+        extensionId: String?,
+    ): ConfigNode<T>? {
+        return if (extensionId != null) {
+            nodes
+                .filterIsInstance<ExtensionConfigNode<*>>()
+                .filter { it.extensionId == extensionId && it.kClass == kClass }
+                .firstOrNull() as ConfigNode<T>?
+        } else {
+            nodes
+                .filterIsInstance<RootConfigNode<*>>()
+                .filter { it.kClass == kClass }
+                .firstOrNull() as ConfigNode<T>?
+        }
+    }
+
+    private fun resolveExtensionId(
+        kClass: KClass<*>,
+        annotation: ConfigFile,
+        extensionId: String?,
+    ): String? {
+        return when (annotation.type) {
             ConfigType.Root -> null
             ConfigType.Extension -> {
-                val id = extensionId?.takeIf { it.isNotBlank() }
+                extensionId?.takeIf { it.isNotBlank() }
                     ?: annotation.extensionId.takeIf { it.isNotBlank() }
                     ?: error(
                         "${kClass.qualifiedName} is ConfigType.Extension but no extensionId " +
                             "was provided (annotation or argument)"
                     )
-                id
             }
         }
-
-        val key = ConfigKey(kClass, resolvedExtensionId)
-
-        @Suppress("UNCHECKED_CAST")
-        val existing = nodes[key] as ConfigNode<T>?
-        if (existing != null) return existing.value
-
-        val file = resolveFile(annotation, resolvedExtensionId)
-        ensureParent(file)
-
-        val loaded = loadOrDefault(kClass, file, annotation, writeDefault)
-        val node = ConfigNode(loaded, file, kClass)
-        nodes[key] = node
-        watchDirectory(file.toPath().parent)
-
-        return node.value
     }
 
-    /** Force reload of a known config (or no-op if not registered yet). */
-    fun <T : Any> reload(kClass: KClass<T>, extensionId: String? = null): T? {
-        val key = ConfigKey(kClass, extensionId)
-        @Suppress("UNCHECKED_CAST")
-        val node = nodes[key] as ConfigNode<T>? ?: return null
-        val result = decodeFile(kClass, node.file)
-        if (result is ConfigLoadResult.Loaded<*>) {
-            @Suppress("UNCHECKED_CAST")
-            node.value = applyOverlays(kClass, result.data as T)
-            logger.info("Reloaded config ${kClass.simpleName} from ${node.file.absolutePath}")
-            return node.value
-        }
-        return node.value
-    }
-
-    /** Startup helper: register all known root configs so defaults are written early. */
-    suspend fun loadConfigsStartup(vararg classes: KClass<*>) {
-        logger.info("Loading configs from ${directory.toAbsolutePath()}")
-        classes.forEach { kClass ->
-            @Suppress("UNCHECKED_CAST")
-            config(kClass as KClass<Any>, writeDefault = true)
-        }
-    }
+    // -------------------------------------------------------------------------
+    // File IO
+    // -------------------------------------------------------------------------
 
     private fun resolveFile(annotation: ConfigFile, extensionId: String?): File {
         val fileName = "${annotation.name}.jsonc"
@@ -159,14 +239,14 @@ class ConfigService(
     }
 
     private fun ensureParent(file: File) {
-        val parent = file.parentFile ?: return
-        if (!parent.exists()) parent.mkdirs()
+        file.parentFile?.takeUnless { it.exists() }?.mkdirs()
     }
 
     private fun <T : Any> loadOrDefault(
         kClass: KClass<T>,
         file: File,
         annotation: ConfigFile,
+        extensionId: String?,
         writeDefault: Boolean,
     ): T {
         when (val result = decodeFile(kClass, file)) {
@@ -179,9 +259,8 @@ class ConfigService(
                     ConfigLoadResult.Failure.NotFound -> {
                         logger.warn("Config file not found: ${file.absolutePath}")
                         if (writeDefault) {
-                            val resource = defaultResourcePath(annotation, extensionId = null)
+                            val resource = defaultResourcePath(annotation, extensionId)
                             try {
-                                // best-effort write from classpath; fall through to empty instance if missing
                                 writeDefaultFromResource(file, resource)
                                 when (val again = decodeFile(kClass, file)) {
                                     is ConfigLoadResult.Loaded<*> -> {
@@ -202,7 +281,6 @@ class ConfigService(
             }
         }
 
-        // Last resort: try no-arg / all-default primary constructor
         return instantiateEmpty(kClass)
             ?: error("Unable to load or construct config ${kClass.qualifiedName}")
     }
@@ -250,13 +328,6 @@ class ConfigService(
     private fun <T : Any> instantiateEmpty(kClass: KClass<T>): T? {
         return try {
             val ctor = kClass.primaryConstructor ?: return null
-            val args = ctor.parameters.associateWith { param ->
-                when {
-                    param.isOptional -> null // use default
-                    else -> null
-                }
-            }.filterValues { it != null }
-            // Prefer callBy with only required defaults filled by Kotlin
             ctor.callBy(emptyMap())
         } catch (_: Exception) {
             null
@@ -281,20 +352,23 @@ class ConfigService(
         logger.info("Wrote default config to ${file.absolutePath}")
     }
 
+    // -------------------------------------------------------------------------
+    // Watching
+    // -------------------------------------------------------------------------
+
     private fun watchDirectory(dir: Path) {
-        if (dir == null || !Files.isDirectory(dir)) return
-        if (watchedDirs.add(dir)) {
-            try {
-                dir.register(
-                    watchService,
-                    StandardWatchEventKinds.ENTRY_MODIFY,
-                    StandardWatchEventKinds.ENTRY_CREATE,
-                )
-                logger.debug("Watching config directory $dir")
-            } catch (e: Exception) {
-                watchedDirs.remove(dir)
-                logger.warn("Could not watch $dir: ${e.message}")
-            }
+        if (!Files.isDirectory(dir)) return
+        if (!watchedDirs.add(dir)) return
+        try {
+            dir.register(
+                watchService,
+                StandardWatchEventKinds.ENTRY_MODIFY,
+                StandardWatchEventKinds.ENTRY_CREATE,
+            )
+            logger.debug("Watching config directory $dir")
+        } catch (e: Exception) {
+            watchedDirs.remove(dir)
+            logger.warn("Could not watch $dir: ${e.message}")
         }
     }
 
@@ -311,28 +385,23 @@ class ConfigService(
 
                 val dir = key.watchable() as? Path
                 for (event in key.pollEvents()) {
-                    val kind = event.kind()
-                    if (kind == StandardWatchEventKinds.OVERFLOW) continue
+                    if (event.kind() == StandardWatchEventKinds.OVERFLOW) continue
                     val name = event.context() as? Path ?: continue
                     val changed = dir?.resolve(name)?.toFile() ?: continue
                     if (!changed.name.endsWith(".jsonc")) continue
 
-                    nodes.values
+                    nodes
                         .filter { it.file.absolutePath == changed.absolutePath }
                         .forEach { node ->
-                            reload(node.kClass, extensionIdFor(node))
+                            val extId = (node as? ExtensionConfigNode<*>)?.extensionId
+                            scope.launch {
+                                reload(node.kClass, extId)
+                            }
                         }
                 }
                 key.reset()
             }
         }
-    }
-
-    private fun extensionIdFor(node: ConfigNode<*>): String? {
-        val annotation = node.kClass.findAnnotation<ConfigFile>() ?: return null
-        return if (annotation.type == ConfigType.Extension) {
-            nodes.entries.find { it.value === node }?.key?.extensionId
-        } else null
     }
 
     fun close() {
@@ -342,5 +411,3 @@ class ConfigService(
         }
     }
 }
-
-private typealias ClosedWatchServiceException = java.nio.file.ClosedWatchServiceException
