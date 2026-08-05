@@ -13,5 +13,5 @@ dependencies {
 
 locusApplication {
     mainClass.set("capital.yuri.locus.cli.MainKt")
-    applicationName.set("locus-cli")
+    applicationName.set("locusctl")
 }

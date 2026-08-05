@@ -19,7 +19,7 @@ suspend fun main(args: Array<String>) = LocusCli()
     .subcommands(VersionCommand(), MigrateCommand())
     .main(args)
 
-class LocusCli : SuspendingCliktCommand("locus-cli") {
+class LocusCli : SuspendingCliktCommand("locusctl") {
     override suspend fun run() = Unit
 }
 
@@ -27,7 +27,7 @@ class VersionCommand : SuspendingCliktCommand("version") {
     private val verbose by option("-v", "--verbose").flag()
 
     override suspend fun run() {
-        echo("locus-cli")
+        echo("locus")
         if (verbose) {
             echo("Control plane: HTTP (Unix domain socket planned)")
         }

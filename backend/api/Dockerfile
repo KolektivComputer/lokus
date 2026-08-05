@@ -32,7 +32,7 @@ RUN addgroup -S locus && adduser -S locus -G locus
 
 # Daemon and CLI in separate trees so one COPY does not clobber the other
 COPY --from=build /workspace/backend/api/build/install/locus /app
-COPY --from=build /workspace/backend/cli/build/install/locus-cli /cli
+COPY --from=build /workspace/backend/cli/build/install/locusctl /cli
 
 # Config + extension jars mounted at runtime
 RUN mkdir -p /app/config /app/extensions && chown -R locus:locus /app /cli
