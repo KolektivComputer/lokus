@@ -53,6 +53,9 @@ val repoRootPath: String = rootProject.layout.projectDirectory.asFile.absolutePa
 // Override via -Plocus.updateUrl=https://… for release CI
 val releaseUpdateUrl: String? =
     (findProperty("locus.updateUrl") as String?)?.takeIf { it.isNotBlank() }
+// Override via -Plocus.updateUrl=https://… for release CI
+val releaseUpdateUrl: String? =
+    (findProperty("locus.updateUrl") as String?)?.takeIf { it.isNotBlank() }
 
 fun propOrEnv(prop: String, env: String): String? =
     (findProperty(prop) as String?)?.takeIf { it.isNotBlank() }
