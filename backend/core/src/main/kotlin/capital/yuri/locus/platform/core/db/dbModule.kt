@@ -9,12 +9,11 @@ import capital.yuri.locus.platform.core.db.services.DatabaseService
 import capital.yuri.locus.platform.core.db.services.TableRegistryService
 import capital.yuri.locus.platform.core.domain.data.tables.DomainsTable
 import org.koin.dsl.module
-import org.koin.plugin.module.dsl.single
 
 val dbModule = module {
     single { TableRegistryService() }
-    single<DatabaseService>()
-    single<DatabaseMigrationService>()
+    single { DatabaseService() }
+    single { DatabaseMigrationService() }
 }
 
 /** Platform tables owned by core (not extension-owned). */
