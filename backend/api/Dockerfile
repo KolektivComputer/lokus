@@ -30,13 +30,13 @@ WORKDIR /app
 
 RUN addgroup -S locus && adduser -S locus -G locus
 
+# Daemon and CLI in separate trees so one COPY does not clobber the other
 COPY --from=build /workspace/backend/api/build/install/locus /app
-COPY --from=build /workspace/backend/cli/build/install/locus-cli /app
+COPY --from=build /workspace/backend/cli/build/install/locus-cli /cli
 
 # Config + extension jars mounted at runtime
-RUN mkdir -p /app/config /app/extensions && chown -R locus:locus /app
+RUN mkdir -p /app/config /app/extensions && chown -R locus:locus /app /cli
 
-# PATH includes locus-cli for exec from the same image
 ENV PATH="/app/bin:/cli/bin:${PATH}"
 
 USER locus
