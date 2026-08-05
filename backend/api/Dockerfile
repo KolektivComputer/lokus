@@ -22,7 +22,7 @@ RUN chmod +x gradlew
 RUN ./gradlew :backend:api:dependencies --no-daemon || true
 
 COPY backend/api/src ./backend/api/src
-RUN ./gradlew :backend:api:installDist --no-daemon -x test
+RUN ./gradlew :backend:api:installDist :backend:cli:installDist --no-daemon -x test
 
 # ---- runtime ----
 FROM eclipse-temurin:21-jre-alpine
@@ -31,7 +31,7 @@ WORKDIR /app
 RUN addgroup -S locus && adduser -S locus -G locus
 
 COPY --from=build /workspace/backend/api/build/install/locus /app
-COPY --from=build /workspace/backend/cli/build/install/locus-cli /cli
+COPY --from=build /workspace/backend/cli/build/install/locus-cli /app
 
 # Config + extension jars mounted at runtime
 RUN mkdir -p /app/config /app/extensions && chown -R locus:locus /app
