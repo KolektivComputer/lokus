@@ -1,7 +1,7 @@
 package capital.yuri.locus.platform.core.version.services
 
-import capital.yuri.locus.platform.core.resource.data.types.results.ResourceLoadResult
-import capital.yuri.locus.platform.core.resource.services.ResourceLoader
+import capital.yuri.locus.common.resource.ResourceLoadResult
+import capital.yuri.locus.common.resource.ResourceLoader
 import capital.yuri.locus.platform.core.version.data.types.ComponentKind
 import capital.yuri.locus.platform.core.version.data.types.ComponentVersion
 import capital.yuri.locus.platform.core.version.data.types.CoreVersionInfo
