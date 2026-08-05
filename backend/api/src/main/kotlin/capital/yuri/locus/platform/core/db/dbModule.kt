@@ -18,9 +18,6 @@ val dbModule = module {
     single { TableRegistryService() }
     single<DatabaseService>()
     single<DatabaseMigrationService>()
-
-    // Core + in-tree links tables until extensions register themselves at load time
-    onClose { /* no-op placeholder for symmetry */ }
 }
 
 /** Register platform tables once the Koin graph is live. Call from app startup. */
