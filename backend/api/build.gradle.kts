@@ -68,7 +68,7 @@ val generateVersionJson by tasks.registering {
         fun runGit(vararg args: String): Pair<Int, String> {
             val pb = ProcessBuilder("git", *args)
                 .redirectErrorStream(true)
-                .directory(java.io.File(gitWorkingDir))
+                .directory(File(gitWorkingDir))
             val proc = pb.start()
             val text = proc.inputStream.bufferedReader().readText().trim()
             return proc.waitFor() to text

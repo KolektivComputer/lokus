@@ -7,5 +7,6 @@ import io.ktor.server.routing.route
 fun Route.apiRoutes() {
     route("/api") {
         authRoutes()
+        statusRoutes()
     }
 }
