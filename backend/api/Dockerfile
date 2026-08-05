@@ -37,5 +37,6 @@ USER locus
 EXPOSE 8080
 
 WORKDIR "/app"
+# locus api [<options>] <configdirectory>
 ENTRYPOINT ["/app/bin/locus"]
-CMD [ "/app/config", "api", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["api", "--host", "0.0.0.0", "--port", "8080", "/app/config"]
