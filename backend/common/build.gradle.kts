@@ -5,5 +5,4 @@ plugins {
 dependencies {
     implementation(libs.bundles.kotlinx)
     implementation(libs.bundles.logging)
-    implementation(libs.koin.core)
 }
