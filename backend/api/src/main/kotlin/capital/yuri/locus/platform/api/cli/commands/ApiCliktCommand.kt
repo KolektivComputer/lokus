@@ -69,8 +69,10 @@ class ApiCliktCommand : SuspendingCliktCommand("api") {
                 val apiConfig by configService.config<ApiConfig>()
 
                 // Accept every hostname in api.hosts (+ baseUrl.host)
-                host(*apiConfig.apiHostNames()) {
-                    apiRoutes()
+                apiConfig.apiHostNames().forEach { hostName ->
+                    host(hostName) {
+                        apiRoutes()
+                    }
                 }
 
                 // Frontend host block reserved for bundles / themes later:
