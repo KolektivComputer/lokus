@@ -8,7 +8,7 @@ import capital.yuri.locus.platform.core.stats.data.types.groups.DatabaseStatGrou
 import capital.yuri.locus.platform.core.stats.data.types.groups.InstanceStatGroup
 import capital.yuri.locus.platform.core.stats.data.types.groups.RuntimeStatGroup
 import capital.yuri.locus.platform.core.stats.data.types.results.GetStatGroupResult
-import kotlinx.serialization.json.Json
+import capital.yuri.locus.platform.core.version.services.VersionService
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -21,11 +21,10 @@ import kotlin.time.Instant
 class StatsService : KoinComponent {
     private val logger = LoggerFactory.getLogger(StatsService::class.java)
     private val schedulerService by inject<SchedulerService>()
+    private val versionService by inject<VersionService>()
 
     private val startedAt: Instant = Clock.System.now()
     private val providers = ConcurrentHashMap<String, StatisticGroupProvider>()
-
-    private val buildVersion: BuildVersion? by lazy { loadBuildVersion() }
 
     init {
         register(InstanceGroup())
@@ -59,18 +58,22 @@ class StatsService : KoinComponent {
     suspend fun getAll(): Map<String, GetStatGroupResult> =
         listGroupIds().associate { it.value to getGroup(it) }
 
-    // ---- core groups --------------------------------------------------------
-
     private inner class InstanceGroup : StatisticGroupProvider {
         override val id = StatisticGroupId.Instance
 
         override suspend fun collect(): GetStatGroupResult {
             val now = Clock.System.now()
+            val core = versionService.core
             return GetStatGroupResult.SuccessInstance(
                 data = InstanceStatGroup(
                     uptimeSeconds = (now - startedAt).inWholeSeconds,
                     startedAtEpochMs = startedAt.toEpochMilliseconds(),
-                    version = buildVersion,
+                    version = BuildVersion(
+                        tag = core.tag,
+                        commit = core.commit,
+                        dirty = core.dirty,
+                        updateUrl = core.updateUrl,
+                    ),
                 ),
             )
         }
@@ -131,17 +134,6 @@ class StatsService : KoinComponent {
         val dump = probes.getMethod("dumpCoroutinesInfo").invoke(instance) as? List<*>
         dump?.size?.toLong()
     } catch (_: Throwable) {
-        null
-    }
-
-    private fun loadBuildVersion(): BuildVersion? = try {
-        val stream = StatsService::class.java.getResourceAsStream("/version.json") ?: return null
-        stream.use {
-            Json { ignoreUnknownKeys = true }
-                .decodeFromString(BuildVersion.serializer(), it.bufferedReader().readText())
-        }
-    } catch (e: Exception) {
-        logger.debug("No version.json: {}", e.message)
         null
     }
 }

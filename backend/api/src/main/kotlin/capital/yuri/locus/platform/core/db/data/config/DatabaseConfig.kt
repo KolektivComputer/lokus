@@ -1,13 +1,14 @@
 package capital.yuri.locus.platform.core.db.data.config
 
-import capital.yuri.locus.platform.core.config.ConfigFile
-import capital.yuri.locus.platform.core.config.ConfigType
+import capital.yuri.locus.platform.core.config.Config
+import capital.yuri.locus.platform.core.config.ConfigLocation
+import capital.yuri.locus.platform.core.config.ConfigScope
 import capital.yuri.locus.platform.core.config.Environment
 import capital.yuri.locus.platform.core.config.JavaProperty
 import capital.yuri.locus.platform.core.db.data.DatabaseType
 import kotlinx.serialization.Serializable
 
-@ConfigFile(name = "database", type = ConfigType.Root)
+@Config(name = "database", scope = ConfigScope.Root, location = ConfigLocation.File)
 @Serializable
 data class DatabaseConfig(
     val jdbcUrl: String = "jdbc:postgresql://localhost:5432/locus",

@@ -32,8 +32,8 @@ import java.nio.file.Path
 class ApiCliktCommand : SuspendingCliktCommand("api") {
     val configDirectory by requireObject<Path>()
 
-    val host: String by option(help = "Host name").default("127.0.0.1")
-    val port: Int by option(help = "").int().default(8080)
+    val host: String by option(help = "Bind address").default("127.0.0.1")
+    val port: Int by option(help = "Bind port").int().default(8080)
 
     override suspend fun run() {
         embeddedServer(Netty, port = port, host = host) {
@@ -65,12 +65,18 @@ class ApiCliktCommand : SuspendingCliktCommand("api") {
             }
 
             routing {
-
                 val configService by inject<ConfigService>()
                 val apiConfig by configService.config<ApiConfig>()
-                host(apiConfig.baseUrl.host) {
-                    apiRoutes()
+
+                // Accept every hostname in api.hosts (+ baseUrl.host)
+                apiConfig.apiHostNames().forEach { hostName ->
+                    host(hostName) {
+                        apiRoutes()
+                    }
                 }
+
+                // Frontend host block reserved for bundles / themes later:
+                // host(*apiConfig.frontendHostNames()) { … }
             }
         }.start(wait = true)
     }

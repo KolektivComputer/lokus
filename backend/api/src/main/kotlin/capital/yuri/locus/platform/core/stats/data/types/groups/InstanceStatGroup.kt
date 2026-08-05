@@ -14,4 +14,5 @@ data class BuildVersion(
     val tag: String? = null,
     val commit: String? = null,
     val dirty: Boolean = false,
+    val updateUrl: String? = null,
 )
