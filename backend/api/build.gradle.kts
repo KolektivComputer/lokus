@@ -43,19 +43,21 @@ koinCompiler {
 }
 
 // ---------------------------------------------------------------------------
-// version.json — classpath resource /version.json (tag + commit + dirty)
-// Configuration-cache safe: only serializable values enter the task action.
+// version.json — /version.json (tag, commit, dirty, updateUrl)
+// updateUrl is null when the working tree is dirty (dev builds).
 // ---------------------------------------------------------------------------
 val generatedVersionDir = layout.buildDirectory.dir("generated/version")
-// Capture at configuration time — Project refs are illegal inside doLast with CC
 val repoRootPath: String = rootProject.layout.projectDirectory.asFile.absolutePath
+// Override via -Plocus.updateUrl=https://… for release CI
+val releaseUpdateUrl: String? =
+    (findProperty("locus.updateUrl") as String?)?.takeIf { it.isNotBlank() }
 
 val generateVersionJson by tasks.registering {
     val outputDir = generatedVersionDir
     val gitWorkingDir = repoRootPath
+    val configuredUpdateUrl = releaseUpdateUrl
 
     outputs.dir(outputDir)
-    // Re-run when HEAD moves (best-effort; missing in non-git checkouts)
     val gitHead = file("$gitWorkingDir/.git/HEAD")
     if (gitHead.exists()) {
         inputs.file(gitHead)
@@ -79,6 +81,8 @@ val generateVersionJson by tasks.registering {
         val tag = tagOut.takeIf { tagCode == 0 && it.isNotBlank() }
         val (dirtyCode, dirtyOut) = runGit("status", "--porcelain")
         val dirty = dirtyCode == 0 && dirtyOut.isNotBlank()
+        // Never advertise updates from a dirty / local workspace
+        val updateUrl = if (dirty) null else configuredUpdateUrl
 
         fun esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
 
@@ -90,7 +94,10 @@ val generateVersionJson by tasks.registering {
             append("  \"commit\": ")
             if (commit.isNotBlank()) append('"').append(esc(commit)).append('"') else append("null")
             appendLine(",")
-            append("  \"dirty\": ").append(dirty).appendLine()
+            append("  \"dirty\": ").append(dirty).appendLine(",")
+            append("  \"updateUrl\": ")
+            if (updateUrl != null) append('"').append(esc(updateUrl)).append('"') else append("null")
+            appendLine()
             appendLine("}")
         }
         dir.resolve("version.json").writeText(json)

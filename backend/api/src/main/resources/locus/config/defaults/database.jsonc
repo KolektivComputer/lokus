@@ -1,0 +1,8 @@
+{
+  // Copied to CONFIG_ROOT/database.jsonc on first boot if missing.
+  // Override credentials via LOCUS_DB_USER / LOCUS_DB_PASS.
+  "jdbcUrl": "jdbc:postgresql://localhost:5432/locus",
+  "driver": "PostgreSQL",
+  "username": "locus",
+  "password": "locus"
+}
