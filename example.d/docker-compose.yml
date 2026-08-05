@@ -21,9 +21,12 @@ services:
 
   api:
     build:
-      # Repo root (parent of example.d) so backend/api/Dockerfile paths resolve
       context: ..
       dockerfile: backend/api/Dockerfile
+      args:
+        LOCUS_COMMIT: ${LOCUS_COMMIT:-}
+        LOCUS_TAG: ${LOCUS_TAG:-}
+        LOCUS_UPDATE_URL: ${LOCUS_UPDATE_URL:-}
     container_name: locus-example-api
     restart: unless-stopped
     depends_on:
@@ -37,6 +40,7 @@ services:
     volumes:
       - ./config:/app/config
       - ./extensions:/app/extensions:ro
+    command: ["api", "--host", "0.0.0.0", "--port", "8080", "/app/config"]
 
 volumes:
   locus_example_pgdata:
