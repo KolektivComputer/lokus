@@ -13,3 +13,7 @@ inline fun <reified E : Enum<E>> enumSetNone(): EnumSet<E> =
 /** [EnumSet] of the given [values]. */
 inline fun <reified E : Enum<E>> enumSetOf(vararg values: E): EnumSet<E> =
     if (values.isEmpty()) enumSetNone() else EnumSet.copyOf(values.toList())
+
+/** [EnumSet] from a collection. */
+inline fun <reified E : Enum<E>> enumSetOf(elements: Collection<E>): EnumSet<E> =
+    if (elements.isEmpty()) enumSetNone() else EnumSet.copyOf(elements)

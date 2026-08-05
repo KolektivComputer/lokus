@@ -7,7 +7,9 @@ import capital.yuri.locus.platform.core.appModule
 import capital.yuri.locus.platform.core.auth.data.config.AuthConfig
 import capital.yuri.locus.platform.core.config.services.ConfigService
 import capital.yuri.locus.platform.core.db.data.config.DatabaseConfig
+import capital.yuri.locus.platform.core.db.registerCoreTables
 import capital.yuri.locus.platform.core.db.services.DatabaseService
+import capital.yuri.locus.platform.core.db.services.TableRegistryService
 import capital.yuri.locus.platform.core.scheduling.services.SchedulerService
 import com.github.ajalt.clikt.command.SuspendingCliktCommand
 import com.github.ajalt.clikt.core.requireObject
@@ -49,8 +51,8 @@ class ApiCliktCommand : SuspendingCliktCommand("api") {
                 AuthConfig::class,
                 ApiConfig::class,
             )
+            get<TableRegistryService>().registerCoreTables()
             get<DatabaseService>().connect()
-            // JDBC job store needs the shared Hikari pool
             get<SchedulerService>().start()
 
             configureAuth()
@@ -68,15 +70,9 @@ class ApiCliktCommand : SuspendingCliktCommand("api") {
                 val configService by inject<ConfigService>()
                 val apiConfig by configService.config<ApiConfig>()
 
-                // Accept every hostname in api.hosts (+ baseUrl.host)
-                apiConfig.apiHostNames().forEach { hostName ->
-                    host(hostName) {
-                        apiRoutes()
-                    }
+                host(*apiConfig.apiHostNames()) {
+                    apiRoutes()
                 }
-
-                // Frontend host block reserved for bundles / themes later:
-                // host(*apiConfig.frontendHostNames()) { … }
             }
         }.start(wait = true)
     }

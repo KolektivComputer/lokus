@@ -1,5 +1,7 @@
 package capital.yuri.locus.platform.core.config.services
 
+import capital.yuri.locus.common.resource.ResourceLoadResult
+import capital.yuri.locus.common.resource.ResourceLoader
 import capital.yuri.locus.platform.core.config.Config
 import capital.yuri.locus.platform.core.config.ConfigCodec
 import capital.yuri.locus.platform.core.config.ConfigLocation
@@ -11,8 +13,6 @@ import capital.yuri.locus.platform.core.config.data.types.ConfigNode
 import capital.yuri.locus.platform.core.config.data.types.ExtensionConfigNode
 import capital.yuri.locus.platform.core.config.data.types.RootConfigNode
 import capital.yuri.locus.platform.core.config.data.types.results.ConfigLoadResult
-import capital.yuri.locus.platform.core.resource.data.types.results.ResourceLoadResult
-import capital.yuri.locus.platform.core.resource.services.ResourceLoader
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -113,11 +113,6 @@ class ConfigService(private val directory: Path) : KoinComponent {
                 )
             }
 
-            // Resource-only configs are not watched on disk
-            if (annotation.location == ConfigLocation.Resource) {
-                // still construct node for delegate API; refresh is a no-op for missing files
-            }
-
             nodes += node
             return node
         }
@@ -191,12 +186,20 @@ class ConfigService(private val directory: Path) : KoinComponent {
             }
 
             ConfigLocation.Resource -> {
-                when (val result = resourceLoader.loadFirst(kClass, annotation.location.resourceCandidates(ctx))) {
-                    is ResourceLoadResult.Ok -> return applyOverlays(kClass, result.value)
+                when (val text = resourceLoader.loadTextFirst(annotation.location.resourceCandidates(ctx))) {
+                    is ResourceLoadResult.Ok -> {
+                        return try {
+                            applyOverlays(kClass, ConfigCodec.decode(kClass, text.value))
+                        } catch (e: Exception) {
+                            logger.error("Resource config decode error: {}", e.message)
+                            instantiateEmpty(kClass)
+                                ?: error("Unable to load or construct config ${kClass.qualifiedName}")
+                        }
+                    }
                     is ResourceLoadResult.NotFound ->
                         logger.warn("Resource config not found for '{}'", ctx.name)
                     is ResourceLoadResult.DecodeError ->
-                        logger.error("Resource config decode error: {}", result.message)
+                        logger.error("Resource config decode error: {}", text.message)
                 }
             }
         }
