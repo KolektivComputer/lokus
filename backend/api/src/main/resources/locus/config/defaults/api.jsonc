@@ -1,4 +1,8 @@
 {
   // Copied to CONFIG_ROOT/api.jsonc on first boot if missing.
-  "baseUrl": "http://127.0.0.1:8080"
+  "baseUrl": "http://127.0.0.1:8080",
+  // Host headers accepted for the main API (baseUrl host is always included)
+  "hosts": ["127.0.0.1", "localhost"],
+  // Browser / frontend plugs (themes, bundles) — wired later
+  "frontendHosts": ["127.0.0.1", "localhost"]
 }
