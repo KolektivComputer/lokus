@@ -161,9 +161,9 @@ class ConfigService(private val directory: Path) : KoinComponent {
                             @Suppress("UNCHECKED_CAST")
                             return applyOverlays(kClass, result.data as T)
                         }
-                        is ConfigLoadResult.Failure.DecodeError ->
+                        ConfigLoadResult.Failure.DecodeError ->
                             logger.error("Failed to decode {}", file.absolutePath)
-                        is ConfigLoadResult.Failure.NotFound -> Unit
+                        ConfigLoadResult.Failure.NotFound -> Unit
                     }
                 }
 
