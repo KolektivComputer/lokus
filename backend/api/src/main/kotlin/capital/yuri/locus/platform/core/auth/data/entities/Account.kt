@@ -2,7 +2,7 @@
 
 package capital.yuri.locus.platform.core.auth.data.entities
 
-import capital.yuri.locus.ktx.java.enumSetOf
+import capital.yuri.locus.common.ext.enumSetOf
 import capital.yuri.locus.platform.core.auth.data.tables.AccountsTable
 import capital.yuri.locus.platform.core.auth.data.tables.PermissionGrantsTable
 import capital.yuri.locus.platform.core.auth.data.types.permission.Permissions

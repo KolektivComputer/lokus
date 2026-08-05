@@ -24,18 +24,16 @@ data class ApiConfig(
      */
     val frontendHosts: List<String> = listOf("127.0.0.1", "localhost"),
 ) {
-    /** Distinct hostnames for Ktor `host(...)` on the main API. */
-    fun apiHostNames(): Array<String> =
+    /** Distinct hostnames for Ktor `host(List)` on the main API. */
+    fun apiHostNames(): List<String> =
         (hosts + baseUrl.host)
             .map { it.trim().lowercase() }
             .filter { it.isNotEmpty() }
             .distinct()
-            .toTypedArray()
 
-    fun frontendHostNames(): Array<String> =
+    fun frontendHostNames(): List<String> =
         frontendHosts
             .map { it.trim().lowercase() }
             .filter { it.isNotEmpty() }
             .distinct()
-            .toTypedArray()
 }

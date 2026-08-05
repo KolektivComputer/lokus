@@ -8,9 +8,6 @@ import capital.yuri.locus.platform.core.db.services.DatabaseMigrationService
 import capital.yuri.locus.platform.core.db.services.DatabaseService
 import capital.yuri.locus.platform.core.db.services.TableRegistryService
 import capital.yuri.locus.platform.core.domain.data.tables.DomainsTable
-import capital.yuri.locus.platform.links.data.tables.LinkPageEntriesTable
-import capital.yuri.locus.platform.links.data.tables.LinkPagesTable
-import capital.yuri.locus.platform.links.data.tables.LinksTable
 import org.koin.dsl.module
 import org.koin.plugin.module.dsl.single
 
@@ -20,7 +17,7 @@ val dbModule = module {
     single<DatabaseMigrationService>()
 }
 
-/** Register platform tables once the Koin graph is live. Call from app startup. */
+/** Platform tables owned by core (not extension-owned). */
 fun TableRegistryService.registerCoreTables() {
     register(
         AccountsTable,
@@ -28,8 +25,5 @@ fun TableRegistryService.registerCoreTables() {
         SessionsTable,
         PasswordResetRequestsTable,
         DomainsTable,
-        LinksTable,
-        LinkPagesTable,
-        LinkPageEntriesTable,
     )
 }
