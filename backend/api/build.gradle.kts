@@ -43,8 +43,10 @@ koinCompiler {
 }
 
 // ---------------------------------------------------------------------------
-// version.json — /version.json (tag, commit, dirty, updateUrl)
-// updateUrl is null when the working tree is dirty (dev builds).
+// version.json — classpath /version.json (tag, commit, dirty, updateUrl)
+// Git is optional: Docker/alpine builds often have no git binary. Override via:
+//   -Plocus.commit=… -Plocus.tag=… -Plocus.updateUrl=…
+// or env LOCUS_COMMIT / LOCUS_TAG / LOCUS_UPDATE_URL
 // ---------------------------------------------------------------------------
 val generatedVersionDir = layout.buildDirectory.dir("generated/version")
 val repoRootPath: String = rootProject.layout.projectDirectory.asFile.absolutePath
@@ -52,10 +54,20 @@ val repoRootPath: String = rootProject.layout.projectDirectory.asFile.absolutePa
 val releaseUpdateUrl: String? =
     (findProperty("locus.updateUrl") as String?)?.takeIf { it.isNotBlank() }
 
+fun propOrEnv(prop: String, env: String): String? =
+    (findProperty(prop) as String?)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(env)?.takeIf { it.isNotBlank() }
+
+val overrideCommit = propOrEnv("locus.commit", "LOCUS_COMMIT")
+val overrideTag = propOrEnv("locus.tag", "LOCUS_TAG")
+val overrideUpdateUrl = propOrEnv("locus.updateUrl", "LOCUS_UPDATE_URL")
+
 val generateVersionJson by tasks.registering {
     val outputDir = generatedVersionDir
     val gitWorkingDir = repoRootPath
-    val configuredUpdateUrl = releaseUpdateUrl
+    val forcedCommit = overrideCommit
+    val forcedTag = overrideTag
+    val forcedUpdateUrl = overrideUpdateUrl
 
     outputs.dir(outputDir)
     val gitHead = file("$gitWorkingDir/.git/HEAD")
@@ -67,22 +79,30 @@ val generateVersionJson by tasks.registering {
         val dir = outputDir.get().asFile
         dir.mkdirs()
 
-        fun runGit(vararg args: String): Pair<Int, String> {
+        fun runGit(vararg args: String): Pair<Int, String> = try {
             val pb = ProcessBuilder("git", *args)
                 .redirectErrorStream(true)
-                .directory(java.io.File(gitWorkingDir))
+                .directory(File(gitWorkingDir))
             val proc = pb.start()
             val text = proc.inputStream.bufferedReader().readText().trim()
-            return proc.waitFor() to text
+            proc.waitFor() to text
+        } catch (_: Exception) {
+            // No git binary (typical in minimal Docker build images)
+            -1 to ""
         }
 
-        val (_, commit) = runGit("rev-parse", "HEAD")
+        val (_, gitCommit) = runGit("rev-parse", "HEAD")
         val (tagCode, tagOut) = runGit("describe", "--tags", "--exact-match")
-        val tag = tagOut.takeIf { tagCode == 0 && it.isNotBlank() }
         val (dirtyCode, dirtyOut) = runGit("status", "--porcelain")
-        val dirty = dirtyCode == 0 && dirtyOut.isNotBlank()
-        // Never advertise updates from a dirty / local workspace
-        val updateUrl = if (dirty) null else configuredUpdateUrl
+
+        val commit = forcedCommit ?: gitCommit.takeIf { it.isNotBlank() }
+        val tag = forcedTag ?: tagOut.takeIf { tagCode == 0 && it.isNotBlank() }
+        val dirty = if (forcedCommit != null || forcedTag != null) {
+            false
+        } else {
+            dirtyCode == 0 && dirtyOut.isNotBlank()
+        }
+        val updateUrl = if (dirty) null else forcedUpdateUrl
 
         fun esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
 
@@ -92,7 +112,7 @@ val generateVersionJson by tasks.registering {
             if (tag != null) append('"').append(esc(tag)).append('"') else append("null")
             appendLine(",")
             append("  \"commit\": ")
-            if (commit.isNotBlank()) append('"').append(esc(commit)).append('"') else append("null")
+            if (commit != null) append('"').append(esc(commit)).append('"') else append("null")
             appendLine(",")
             append("  \"dirty\": ").append(dirty).appendLine(",")
             append("  \"updateUrl\": ")

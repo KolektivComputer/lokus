@@ -2,7 +2,7 @@ package capital.yuri.locus.platform.api.cli.commands
 
 import capital.yuri.locus.platform.api.auth.configureAuth
 import capital.yuri.locus.platform.api.data.config.ApiConfig
-import capital.yuri.locus.platform.api.routes.statusRoutes
+import capital.yuri.locus.platform.api.routes.apiRoutes
 import capital.yuri.locus.platform.core.appModule
 import capital.yuri.locus.platform.core.auth.data.config.AuthConfig
 import capital.yuri.locus.platform.core.config.services.ConfigService
@@ -65,12 +65,11 @@ class ApiCliktCommand : SuspendingCliktCommand("api") {
             }
 
             routing {
-                statusRoutes()
 
                 val configService by inject<ConfigService>()
                 val apiConfig by configService.config<ApiConfig>()
                 host(apiConfig.baseUrl.host) {
-                    // central API routes
+                    apiRoutes()
                 }
             }
         }.start(wait = true)
