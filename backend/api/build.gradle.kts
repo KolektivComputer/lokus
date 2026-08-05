@@ -44,20 +44,31 @@ koinCompiler {
 
 // ---------------------------------------------------------------------------
 // version.json — classpath resource /version.json (tag + commit + dirty)
+// Configuration-cache safe: only serializable values enter the task action.
 // ---------------------------------------------------------------------------
 val generatedVersionDir = layout.buildDirectory.dir("generated/version")
+// Capture at configuration time — Project refs are illegal inside doLast with CC
+val repoRootPath: String = rootProject.layout.projectDirectory.asFile.absolutePath
 
 val generateVersionJson by tasks.registering {
-    outputs.dir(generatedVersionDir)
+    val outputDir = generatedVersionDir
+    val gitWorkingDir = repoRootPath
+
+    outputs.dir(outputDir)
+    // Re-run when HEAD moves (best-effort; missing in non-git checkouts)
+    val gitHead = file("$gitWorkingDir/.git/HEAD")
+    if (gitHead.exists()) {
+        inputs.file(gitHead)
+    }
 
     doLast {
-        val dir = generatedVersionDir.get().asFile
+        val dir = outputDir.get().asFile
         dir.mkdirs()
 
         fun runGit(vararg args: String): Pair<Int, String> {
             val pb = ProcessBuilder("git", *args)
                 .redirectErrorStream(true)
-                .directory(rootProject.projectDir)
+                .directory(java.io.File(gitWorkingDir))
             val proc = pb.start()
             val text = proc.inputStream.bufferedReader().readText().trim()
             return proc.waitFor() to text
