@@ -1,25 +1,27 @@
 package capital.yuri.locus.platform.core.config.services
 
-import capital.yuri.locus.platform.core.config.ConfigFile
-import capital.yuri.locus.platform.core.config.ConfigType
+import capital.yuri.locus.platform.core.config.Config
+import capital.yuri.locus.platform.core.config.ConfigCodec
+import capital.yuri.locus.platform.core.config.ConfigLocation
+import capital.yuri.locus.platform.core.config.ConfigResolveContext
+import capital.yuri.locus.platform.core.config.ConfigScope
 import capital.yuri.locus.platform.core.config.Environment
 import capital.yuri.locus.platform.core.config.JavaProperty
 import capital.yuri.locus.platform.core.config.data.types.ConfigNode
 import capital.yuri.locus.platform.core.config.data.types.ExtensionConfigNode
 import capital.yuri.locus.platform.core.config.data.types.RootConfigNode
 import capital.yuri.locus.platform.core.config.data.types.results.ConfigLoadResult
+import capital.yuri.locus.platform.core.resource.data.types.results.ResourceLoadResult
+import capital.yuri.locus.platform.core.resource.services.ResourceLoader
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.io.IOException
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.serializer
 import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.io.path.div
 import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
 import kotlin.reflect.full.findAnnotation
@@ -30,39 +32,26 @@ import kotlin.reflect.jvm.javaField
 /**
  * Factory + registry for [ConfigNode]s.
  *
- * Nodes watch their own files and expose values via property delegate:
  * ```
  * private val db by configService.config<DatabaseConfig>()
- * private val shop by configService.config<ShopConfig>() // extensionId from @ConfigFile
+ * private val shop by configService.config<ShopConfig>() // extensionId from @Config
  * ```
  */
 class ConfigService(private val directory: Path) : KoinComponent {
-    private val json = Json {
-        prettyPrint = true
-        ignoreUnknownKeys = true
-        allowComments = true
-    }
-
+    private val resourceLoader by inject<ResourceLoader>()
     private val logger = LoggerFactory.getLogger(ConfigService::class.java)
 
     private val nodes = CopyOnWriteArrayList<ConfigNode<*>>()
     private val registryMutex = Mutex()
 
-    /**
-     * Returns a [ConfigNode] usable as a property delegate (`by`).
-     * Creates + starts watching on first resolve; subsequent calls reuse the same node.
-     */
     inline fun <reified T : Any> config(extensionId: String? = null, writeDefault: Boolean = true): ConfigNode<T> =
         config(T::class, extensionId, writeDefault)
 
     fun <T : Any> config(kClass: KClass<T>, extensionId: String? = null, writeDefault: Boolean = true): ConfigNode<T> =
-        runBlocking {
-            getOrCreateNode(kClass, extensionId, writeDefault)
-        }
+        runBlocking { getOrCreateNode(kClass, extensionId, writeDefault) }
 
-    /** Eagerly register root configs at startup. */
     suspend fun loadConfigsStartup(vararg classes: KClass<*>) {
-        logger.info("Loading configs from ${directory.toAbsolutePath()}")
+        logger.info("Loading configs from {}", directory.toAbsolutePath())
         classes.forEach { kClass ->
             @Suppress("UNCHECKED_CAST")
             getOrCreateNode(kClass as KClass<Any>, extensionId = null, writeDefault = true)
@@ -75,27 +64,28 @@ class ConfigService(private val directory: Path) : KoinComponent {
         return node.value
     }
 
-    // -------------------------------------------------------------------------
-    // Registry
-    // -------------------------------------------------------------------------
-
     private suspend fun <T : Any> getOrCreateNode(
         kClass: KClass<T>,
         extensionId: String?,
         writeDefault: Boolean,
     ): ConfigNode<T> {
-        val annotation = kClass.findAnnotation<ConfigFile>()
-            ?: error("${kClass.qualifiedName} is missing @ConfigFile")
+        val annotation = kClass.findAnnotation<Config>()
+            ?: error("${kClass.qualifiedName} is missing @Config")
 
         val resolvedExtensionId = resolveExtensionId(kClass, annotation, extensionId)
+        val ctx = ConfigResolveContext(
+            name = annotation.name,
+            scope = annotation.scope,
+            extensionId = resolvedExtensionId,
+            configDirectory = directory,
+        )
 
         registryMutex.withLock {
             findNode(kClass, resolvedExtensionId)?.let { return it }
 
-            val file = resolveFile(annotation, resolvedExtensionId)
-            ensureParent(file)
-
-            val loaded = loadOrDefault(kClass, file, annotation, resolvedExtensionId, writeDefault)
+            val loaded = loadConfig(kClass, annotation, ctx, writeDefault)
+            val primaryFile = annotation.location.fileCandidates(ctx).firstOrNull()
+                ?: File(directory.toFile(), "${annotation.name}.jsonc")
 
             val reloadFn: suspend (File) -> T? = { f ->
                 when (val result = decodeFile(kClass, f)) {
@@ -103,26 +93,29 @@ class ConfigService(private val directory: Path) : KoinComponent {
                         @Suppress("UNCHECKED_CAST")
                         applyOverlays(kClass, result.data as T)
                     }
-
                     else -> null
                 }
             }
 
-            val node: ConfigNode<T> = when (annotation.type) {
-                ConfigType.Root -> RootConfigNode(
+            val node: ConfigNode<T> = when (annotation.scope) {
+                ConfigScope.Root -> RootConfigNode(
                     kClass = kClass,
-                    file = file,
+                    file = primaryFile,
                     initial = loaded,
                     reload = reloadFn,
                 )
-
-                ConfigType.Extension -> ExtensionConfigNode(
+                ConfigScope.Extension -> ExtensionConfigNode(
                     extensionId = requireNotNull(resolvedExtensionId),
                     kClass = kClass,
-                    file = file,
+                    file = primaryFile,
                     initial = loaded,
                     reload = reloadFn,
                 )
+            }
+
+            // Resource-only configs are not watched on disk
+            if (annotation.location == ConfigLocation.Resource) {
+                // still construct node for delegate API; refresh is a no-op for missing files
             }
 
             nodes += node
@@ -130,10 +123,6 @@ class ConfigService(private val directory: Path) : KoinComponent {
         }
     }
 
-    /**
-     * If [extensionId] is set (arg or annotation), only [ExtensionConfigNode]s with that id.
-     * Otherwise only [RootConfigNode]s.
-     */
     @Suppress("UNCHECKED_CAST")
     private fun <T : Any> findNode(kClass: KClass<T>, extensionId: String?): ConfigNode<T>? =
         if (extensionId != null) {
@@ -146,76 +135,68 @@ class ConfigService(private val directory: Path) : KoinComponent {
                 .firstOrNull { it.kClass == kClass } as ConfigNode<T>?
         }
 
-    private fun resolveExtensionId(kClass: KClass<*>, annotation: ConfigFile, extensionId: String?): String? =
-        when (annotation.type) {
-            ConfigType.Root -> null
-
-            ConfigType.Extension ->
+    private fun resolveExtensionId(kClass: KClass<*>, annotation: Config, extensionId: String?): String? =
+        when (annotation.scope) {
+            ConfigScope.Root -> null
+            ConfigScope.Extension ->
                 extensionId?.takeIf { it.isNotBlank() }
                     ?: annotation.extensionId.takeIf { it.isNotBlank() }
                     ?: error(
-                        "${kClass.qualifiedName} is ConfigType.Extension but no extensionId " +
+                        "${kClass.qualifiedName} is ConfigScope.Extension but no extensionId " +
                             "was provided (annotation or argument)",
                     )
         }
 
-    // -------------------------------------------------------------------------
-    // File IO
-    // -------------------------------------------------------------------------
-
-    private fun resolveFile(annotation: ConfigFile, extensionId: String?): File {
-        val fileName = "${annotation.name}.jsonc"
-        return when (annotation.type) {
-            ConfigType.Root -> (directory / fileName).toFile()
-
-            ConfigType.Extension -> {
-                requireNotNull(extensionId)
-                (directory / "ext" / extensionId / fileName).toFile()
-            }
-        }
-    }
-
-    private fun ensureParent(file: File) {
-        file.parentFile?.takeUnless { it.exists() }?.mkdirs()
-    }
-
-    private fun <T : Any> loadOrDefault(
+    private fun <T : Any> loadConfig(
         kClass: KClass<T>,
-        file: File,
-        annotation: ConfigFile,
-        extensionId: String?,
+        annotation: Config,
+        ctx: ConfigResolveContext,
         writeDefault: Boolean,
     ): T {
-        when (val result = decodeFile(kClass, file)) {
-            is ConfigLoadResult.Loaded<*> -> {
-                @Suppress("UNCHECKED_CAST")
-                return applyOverlays(kClass, result.data as T)
-            }
+        when (annotation.location) {
+            ConfigLocation.File -> {
+                for (file in annotation.location.fileCandidates(ctx)) {
+                    when (val result = decodeFile(kClass, file)) {
+                        is ConfigLoadResult.Loaded<*> -> {
+                            @Suppress("UNCHECKED_CAST")
+                            return applyOverlays(kClass, result.data as T)
+                        }
+                        is ConfigLoadResult.Failure.DecodeError ->
+                            logger.error("Failed to decode {}", file.absolutePath)
+                        is ConfigLoadResult.Failure.NotFound -> Unit
+                    }
+                }
 
-            is ConfigLoadResult.Failure -> {
-                when (result) {
-                    ConfigLoadResult.Failure.NotFound -> {
-                        logger.warn("Config file not found: ${file.absolutePath}")
-                        if (writeDefault) {
-                            val resource = defaultResourcePath(annotation, extensionId)
-                            try {
-                                writeDefaultFromResource(file, resource)
-                                when (val again = decodeFile(kClass, file)) {
+                logger.warn("Config file not found for '{}' under {}", ctx.name, directory)
+                if (writeDefault) {
+                    val target = annotation.location.fileCandidates(ctx).first()
+                    val defaults = ConfigLocation.defaultResourceCandidates(ctx)
+                    for (resource in defaults) {
+                        when (val copied = resourceLoader.copyToFile(resource, target)) {
+                            is ResourceLoadResult.Ok -> {
+                                when (val again = decodeFile(kClass, target)) {
                                     is ConfigLoadResult.Loaded<*> -> {
                                         @Suppress("UNCHECKED_CAST")
                                         return applyOverlays(kClass, again.data as T)
                                     }
-
                                     else -> Unit
                                 }
-                            } catch (e: Exception) {
-                                logger.warn("Could not write default for ${kClass.simpleName}: ${e.message}")
                             }
+                            is ResourceLoadResult.NotFound -> Unit
+                            is ResourceLoadResult.DecodeError ->
+                                logger.warn("Default resource {}: {}", resource, copied.message)
                         }
                     }
+                }
+            }
 
-                    ConfigLoadResult.Failure.DecodeError ->
-                        logger.error("Failed to decode ${file.absolutePath}")
+            ConfigLocation.Resource -> {
+                when (val result = resourceLoader.loadFirst(kClass, annotation.location.resourceCandidates(ctx))) {
+                    is ResourceLoadResult.Ok -> return applyOverlays(kClass, result.value)
+                    is ResourceLoadResult.NotFound ->
+                        logger.warn("Resource config not found for '{}'", ctx.name)
+                    is ResourceLoadResult.DecodeError ->
+                        logger.error("Resource config decode error: {}", result.message)
                 }
             }
         }
@@ -227,14 +208,10 @@ class ConfigService(private val directory: Path) : KoinComponent {
     private fun <T : Any> decodeFile(kClass: KClass<T>, file: File): ConfigLoadResult {
         if (!file.exists()) return ConfigLoadResult.Failure.NotFound
         return try {
-            val content = file.readText()
-            val serializer = json.serializersModule.serializer(kClass.java)
-
-            @Suppress("UNCHECKED_CAST")
-            val data = json.decodeFromString(serializer, content) as T
+            val data = ConfigCodec.decode(kClass, file.readText())
             ConfigLoadResult.Loaded(data)
         } catch (e: Exception) {
-            logger.error("Decode error for ${file.absolutePath}: ${e.message}")
+            logger.error("Decode error for {}: {}", file.absolutePath, e.message)
             ConfigLoadResult.Failure.DecodeError
         }
     }
@@ -269,23 +246,6 @@ class ConfigService(private val directory: Path) : KoinComponent {
         kClass.primaryConstructor?.callBy(emptyMap())
     } catch (_: Exception) {
         null
-    }
-
-    private fun defaultResourcePath(annotation: ConfigFile, extensionId: String?): String = when (annotation.type) {
-        ConfigType.Root -> "/configs/${annotation.name}.default.jsonc"
-
-        ConfigType.Extension ->
-            "/configs/ext/${extensionId ?: annotation.extensionId}/${annotation.name}.default.jsonc"
-    }
-
-    private fun writeDefaultFromResource(file: File, resource: String) {
-        val stream = ConfigService::class.java.getResourceAsStream(resource)
-            ?: throw IOException("Missing default resource $resource")
-        stream.use { input ->
-            file.parentFile?.mkdirs()
-            file.outputStream().use { output -> input.copyTo(output) }
-        }
-        logger.info("Wrote default config to ${file.absolutePath}")
     }
 
     fun close() {
