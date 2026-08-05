@@ -12,7 +12,9 @@ ENV LOCUS_COMMIT=$LOCUS_COMMIT \
 
 COPY gradlew settings.gradle.kts gradle.properties ./
 COPY gradle ./gradle
-COPY backend/api/build.gradle.kts ./backend/api/
+COPY buildSrc ./buildSrc
+COPY backend ./backend
+COPY extensions ./extensions
 COPY config ./config
 
 RUN chmod +x gradlew
@@ -29,8 +31,13 @@ WORKDIR /app
 RUN addgroup -S locus && adduser -S locus -G locus
 
 COPY --from=build /workspace/backend/api/build/install/locus /app
+COPY --from=build /workspace/backend/cli/build/install/locus-cli /cli
 
+# Config + extension jars mounted at runtime
 RUN mkdir -p /app/config /app/extensions && chown -R locus:locus /app
+
+# PATH includes locus-cli for exec from the same image
+ENV PATH="/app/bin:/cli/bin:${PATH}"
 
 USER locus
 
