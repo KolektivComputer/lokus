@@ -18,10 +18,6 @@ COPY extensions ./extensions
 COPY config ./config
 
 RUN chmod +x gradlew
-
-RUN ./gradlew :backend:api:dependencies --no-daemon || true
-
-COPY backend/api/src ./backend/api/src
 RUN ./gradlew :backend:api:installDist :backend:cli:installDist --no-daemon -x test
 
 # ---- runtime ----
