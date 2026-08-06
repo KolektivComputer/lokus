@@ -10,10 +10,8 @@ import capital.yuri.locus.platform.core.db.data.config.DatabaseConfig
 import capital.yuri.locus.platform.core.db.registerCoreTables
 import capital.yuri.locus.platform.core.db.services.DatabaseService
 import capital.yuri.locus.platform.core.db.services.TableRegistryService
+import capital.yuri.locus.platform.core.extension.services.ExtensionLoaderService
 import capital.yuri.locus.platform.core.scheduling.services.SchedulerService
-import capital.yuri.locus.platform.links.data.tables.LinkPageEntriesTable
-import capital.yuri.locus.platform.links.data.tables.LinkPagesTable
-import capital.yuri.locus.platform.links.data.tables.LinksTable
 import com.github.ajalt.clikt.command.SuspendingCliktCommand
 import com.github.ajalt.clikt.core.requireObject
 import com.github.ajalt.clikt.parameters.options.default
@@ -55,10 +53,11 @@ class ApiCliktCommand : SuspendingCliktCommand("api") {
                 ApiConfig::class,
             )
 
-            val tables = get<TableRegistryService>()
-            tables.registerCoreTables()
-            // In-tree links until :extensions:links registers at load time
-            tables.register(LinksTable, LinkPagesTable, LinkPageEntriesTable)
+            get<TableRegistryService>().registerCoreTables()
+
+            // Classpath providers (monorepo) + optional JARs under <config>/../extensions
+            val extensionsDir = configDirectory.resolveSibling("extensions")
+            get<ExtensionLoaderService>().load(extensionsDir)
 
             get<DatabaseService>().connect()
             get<SchedulerService>().start()

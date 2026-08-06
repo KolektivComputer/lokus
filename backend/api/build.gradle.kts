@@ -7,6 +7,9 @@ plugins {
 dependencies {
     implementation(project(":backend:common"))
     implementation(project(":backend:core"))
+    // In-repo extension on the classpath so ServiceLoader finds it without a dropped JAR.
+    // Production can also drop links-*.jar into extensions/.
+    implementation(project(":extensions:links"))
 
     implementation(platform(libs.koin.bom))
     implementation(libs.bundles.koin)

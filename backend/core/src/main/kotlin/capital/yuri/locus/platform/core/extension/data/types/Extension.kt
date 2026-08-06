@@ -1,13 +1,15 @@
 package capital.yuri.locus.platform.core.extension.data.types
 
 import capital.yuri.locus.platform.core.config.services.ConfigService
+import capital.yuri.locus.platform.core.db.services.TableRegistryService
 import capital.yuri.locus.platform.core.domain.data.types.Endpoint
+import capital.yuri.locus.platform.core.domain.services.EndpointRegistryService
+import org.jetbrains.exposed.v1.core.Table
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import org.koin.core.module.Module
 
 /**
- * Base type for platform extensions.
+ * Live extension instance after SPI discovery and Koin module load.
  *
  * Subclasses can inject configs via:
  * ```
@@ -20,9 +22,24 @@ abstract class Extension : KoinComponent {
 
     protected val configService by inject<ConfigService>()
 
-    /** Koin modules contributed by this extension (loaded with loadModules). */
-    open fun modules(): List<Module> = emptyList()
-
-    /** Domain-linkable endpoints. */
+    /** Domain-linkable endpoints contributed by this extension. */
     open fun endpoints(): List<Endpoint> = emptyList()
+
+    /** Exposed tables owned by this extension (registered for migration). */
+    open fun tables(): List<Table> = emptyList()
+
+    /**
+     * Called once after construction when the extension is installed.
+     * Default wires [tables] and [endpoints] into the core registries.
+     */
+    open fun install(
+        tableRegistry: TableRegistryService,
+        endpointRegistry: EndpointRegistryService,
+    ) {
+        val ownedTables = tables()
+        if (ownedTables.isNotEmpty()) {
+            tableRegistry.register(ownedTables)
+        }
+        endpoints().forEach { endpointRegistry.defineEndpoint(it) }
+    }
 }

@@ -1,17 +1,25 @@
 package capital.yuri.locus.extensions.links
 
-/**
- * Links extension (in-dev, same repo).
- *
- * Tables currently still live under `platform.links` in `:backend:api` and are
- * registered via [capital.yuri.locus.platform.core.db.registerCoreTables].
- * When this module is JAR-loaded, call:
- *
- * ```
- * tableRegistry.register(LinksTable, LinkPagesTable, LinkPageEntriesTable)
- * ```
- */
-object LinksExtension {
-    const val ID = "links"
-    const val VERSION = "0.0.1"
+import capital.yuri.locus.extensions.links.data.tables.LinkPageEntriesTable
+import capital.yuri.locus.extensions.links.data.tables.LinkPagesTable
+import capital.yuri.locus.extensions.links.data.tables.LinksTable
+import capital.yuri.locus.platform.core.extension.data.types.Extension
+import capital.yuri.locus.platform.core.extension.data.types.ExtensionCompanion
+import capital.yuri.locus.platform.core.extension.data.types.ExtensionId
+import org.jetbrains.exposed.v1.core.Table
+
+class LinksExtension : Extension() {
+    override val id: ExtensionId = ID
+    override val name: String = "Links"
+
+    override fun tables(): List<Table> = listOf(
+        LinksTable,
+        LinkPagesTable,
+        LinkPageEntriesTable,
+    )
+
+    companion object : ExtensionCompanion {
+        override val ID = ExtensionId("links")
+        const val VERSION = "0.0.1"
+    }
 }
