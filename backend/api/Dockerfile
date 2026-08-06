@@ -12,15 +12,13 @@ ENV LOCUS_COMMIT=$LOCUS_COMMIT \
 
 COPY gradlew settings.gradle.kts gradle.properties ./
 COPY gradle ./gradle
-COPY backend/api/build.gradle.kts ./backend/api/
+COPY buildSrc ./buildSrc
+COPY backend ./backend
+COPY extensions ./extensions
 COPY config ./config
 
 RUN chmod +x gradlew
-
-RUN ./gradlew :backend:api:dependencies --no-daemon || true
-
-COPY backend/api/src ./backend/api/src
-RUN ./gradlew :backend:api:installDist --no-daemon -x test
+RUN ./gradlew :backend:api:installDist :backend:cli:installDist --no-daemon -x test
 
 # ---- runtime ----
 FROM eclipse-temurin:21-jre-alpine
@@ -28,9 +26,14 @@ WORKDIR /app
 
 RUN addgroup -S locus && adduser -S locus -G locus
 
+# Daemon and CLI in separate trees so one COPY does not clobber the other
 COPY --from=build /workspace/backend/api/build/install/locus /app
+COPY --from=build /workspace/backend/cli/build/install/locusctl /cli
 
-RUN mkdir -p /app/config /app/extensions && chown -R locus:locus /app
+# Config + extension jars mounted at runtime
+RUN mkdir -p /app/config /app/extensions && chown -R locus:locus /app /cli
+
+ENV PATH="/app/bin:/cli/bin:${PATH}"
 
 USER locus
 

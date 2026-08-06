@@ -1,20 +1,12 @@
 plugins {
-    kotlin("jvm") version "2.3.21"
-    kotlin("plugin.serialization") version "2.3.21"
-    application
-
+    id("capital.yuri.locus.kotlin-application")
+    id("capital.yuri.locus.config-resources")
     alias(libs.plugins.koin.compiler)
 }
 
-group = "capital.yuri"
-version = "0.0.1"
-
-repositories {
-    mavenCentral()
-}
-
 dependencies {
-    testImplementation(kotlin("test"))
+    implementation(project(":backend:common"))
+    implementation(project(":backend:core"))
 
     implementation(platform(libs.koin.bom))
     implementation(libs.bundles.koin)
@@ -28,13 +20,13 @@ dependencies {
     implementation(libs.clikt)
 }
 
-kotlin {
-    jvmToolchain(21)
+locusApplication {
+    mainClass.set("capital.yuri.locus.platform.MainKt")
+    applicationName.set("locus")
 }
 
-application {
-    mainClass.set("capital.yuri.locus.platform.MainKt")
-    applicationName = "locus"
+locusConfigResources {
+    enabled.set(true)
 }
 
 koinCompiler {
@@ -50,9 +42,6 @@ koinCompiler {
 // ---------------------------------------------------------------------------
 val generatedVersionDir = layout.buildDirectory.dir("generated/version")
 val repoRootPath: String = rootProject.layout.projectDirectory.asFile.absolutePath
-// Override via -Plocus.updateUrl=https://… for release CI
-val releaseUpdateUrl: String? =
-    (findProperty("locus.updateUrl") as String?)?.takeIf { it.isNotBlank() }
 
 fun propOrEnv(prop: String, env: String): String? =
     (findProperty(prop) as String?)?.takeIf { it.isNotBlank() }
@@ -130,8 +119,4 @@ sourceSets.named("main") {
 
 tasks.named("processResources") {
     dependsOn(generateVersionJson)
-}
-
-tasks.test {
-    useJUnitPlatform()
 }

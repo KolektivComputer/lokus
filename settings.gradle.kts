@@ -1,3 +1,9 @@
 rootProject.name = "locus"
 
-include(":backend:api")
+include(
+    ":backend:common",
+    ":backend:core",
+    ":backend:api",
+    ":backend:cli",
+    ":extensions:links",
+)

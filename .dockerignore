@@ -9,4 +9,4 @@ pnpm-workspace.yaml
 **/*.iml
 **/.DS_Store
 docker/config
-extensions
+# runtime-only extension jars live under example.d/extensions (not in build context)

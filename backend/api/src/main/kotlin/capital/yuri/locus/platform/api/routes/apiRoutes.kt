@@ -8,5 +8,6 @@ fun Route.apiRoutes() {
     route("/api") {
         authRoutes()
         statusRoutes()
+        adminRoutes()
     }
 }
