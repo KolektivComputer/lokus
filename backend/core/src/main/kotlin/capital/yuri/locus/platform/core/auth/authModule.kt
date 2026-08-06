@@ -5,10 +5,11 @@ import capital.yuri.locus.platform.core.auth.services.Argon2Service
 import capital.yuri.locus.platform.core.auth.services.JwtService
 import capital.yuri.locus.platform.core.auth.services.SessionService
 import org.koin.dsl.module
+import org.koin.plugin.module.dsl.single
 
 val authModule = module {
-    single { Argon2Service() }
-    single { AccountAuthenticationService() }
-    single { JwtService() }
-    single { SessionService() }
+    single<Argon2Service>()
+    single<AccountAuthenticationService>()
+    single<JwtService>()
+    single<SessionService>()
 }

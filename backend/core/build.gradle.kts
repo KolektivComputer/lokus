@@ -1,6 +1,7 @@
 plugins {
     id("capital.yuri.locus.kotlin-library")
     id("capital.yuri.locus.config-resources")
+    alias(libs.plugins.koin.compiler)
 }
 
 dependencies {
@@ -19,4 +20,9 @@ dependencies {
 
 locusConfigResources {
     enabled.set(true)
+}
+
+koinCompiler {
+    compileSafety = false
+    strictSafety = false
 }
