@@ -39,7 +39,8 @@ services:
       LOCUS_DB_PASS: locus
     volumes:
       - ./config:/app/config
-      - ./extensions:/app/extensions:ro
+      # Host jars land in drop-in so image-bundled /app/extensions/*.jar stay intact
+      - ./extensions:/app/extensions/drop-in:ro
     # locus <configdirectory> api [<options>]
     command: ["/app/config", "api", "--host", "0.0.0.0", "--port", "8080"]
 

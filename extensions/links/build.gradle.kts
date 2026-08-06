@@ -1,23 +1,30 @@
 plugins {
     id("capital.yuri.locus.kotlin-library")
     id("capital.yuri.locus.config-resources")
+    id("capital.yuri.locus.extension")
     alias(libs.plugins.koin.compiler)
 }
 
 dependencies {
-    implementation(project(":backend:common"))
-    implementation(project(":backend:core"))
+    // Thin jar: core/koin/exposed stay on the host classpath (parent ClassLoader).
+    compileOnly(project(":backend:common"))
+    compileOnly(project(":backend:core"))
 
-    implementation(platform(libs.koin.bom))
-    implementation(libs.bundles.koin)
-    implementation(libs.bundles.kotlinx)
-    implementation(libs.bundles.logging)
-    implementation(libs.bundles.database)
-    implementation(libs.bundles.ktor)
+    compileOnly(platform(libs.koin.bom))
+    compileOnly(libs.bundles.koin)
+    compileOnly(libs.bundles.kotlinx)
+    compileOnly(libs.bundles.logging)
+    compileOnly(libs.bundles.database)
+    compileOnly(libs.bundles.ktor)
 }
 
 locusConfigResources {
     enabled.set(true)
+}
+
+locusExtension {
+    providers.add("capital.yuri.locus.extensions.links.LinksExtensionProvider")
+    archiveBaseName.set("locus-extension-links")
 }
 
 koinCompiler {

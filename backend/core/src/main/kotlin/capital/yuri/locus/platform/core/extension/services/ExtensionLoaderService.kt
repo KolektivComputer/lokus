@@ -16,12 +16,18 @@ import java.nio.file.Path
 import java.util.ServiceLoader
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.extension
+import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
+import kotlin.streams.asSequence
 
 /**
- * Discovers [ExtensionProvider]s via ServiceLoader on the app classpath and
- * any `*.jar` under [extensionsDirectory], loads their Koin modules, then
- * instantiates and installs each [Extension].
+ * Discovers [ExtensionProvider]s via ServiceLoader:
+ * 1. Application classpath (rarely used — prefer JARs)
+ * 2. `*.jar` under [extensionsDirectory]
+ * 3. `*.jar` under [extensionsDirectory]/drop-in` (host-mounted extras)
+ *
+ * Each JAR gets its own [URLClassLoader] parented on the app ClassLoader so
+ * core types resolve from the host while extension classes stay isolated.
  */
 class ExtensionLoaderService : KoinComponent {
     private val logger = LoggerFactory.getLogger(ExtensionLoaderService::class.java)
@@ -34,7 +40,7 @@ class ExtensionLoaderService : KoinComponent {
     fun get(id: ExtensionId): Extension? = loaded[id]
 
     /**
-     * @param extensionsDirectory optional folder of extension JARs (e.g. `/app/extensions`)
+     * @param extensionsDirectory folder of extension JARs (e.g. `/app/extensions`)
      */
     fun load(extensionsDirectory: Path? = null): List<Extension> {
         val providers = discover(extensionsDirectory)
@@ -82,33 +88,59 @@ class ExtensionLoaderService : KoinComponent {
                     logger.debug("Provider {} already registered; skipping from {}", key, source)
                 } else {
                     providers[key] = provider
-                    logger.debug("Discovered extension provider {} from {}", key, source)
+                    logger.info("Discovered extension provider {} from {}", key, source)
                 }
             }
         }
 
-        // Classpath modules (e.g. :extensions:links on the daemon classpath in monorepo)
+        // Optional classpath providers (tests / special embeddings)
         absorb(ExtensionProvider::class.java.classLoader, "classpath")
 
-        if (extensionsDirectory != null && Files.isDirectory(extensionsDirectory)) {
-            Files.list(extensionsDirectory).use { stream ->
-                stream
-                    .filter { it.isRegularFile() && it.extension.equals("jar", ignoreCase = true) }
-                    .forEach { jar ->
-                        try {
-                            val loader = URLClassLoader(
-                                arrayOf(jar.toUri().toURL()),
-                                ExtensionProvider::class.java.classLoader,
-                            )
-                            jarLoaders += loader
-                            absorb(loader, jar.fileName.toString())
-                        } catch (e: Exception) {
-                            logger.error("Failed to open extension jar {}", jar, e)
-                        }
-                    }
+        if (extensionsDirectory != null) {
+            loadJarsFrom(extensionsDirectory, providers, ::absorb)
+            val dropIn = extensionsDirectory.resolve("drop-in")
+            if (dropIn.isDirectory()) {
+                loadJarsFrom(dropIn, providers, ::absorb)
             }
         }
 
         return providers.values.toList()
+    }
+
+    private fun loadJarsFrom(
+        directory: Path,
+        providers: MutableMap<String, ExtensionProvider>,
+        absorb: (ClassLoader, String) -> Unit,
+    ) {
+        if (!directory.isDirectory()) {
+            logger.debug("Extensions directory missing: {}", directory)
+            return
+        }
+
+        val jars = Files.list(directory).use { stream ->
+            stream.asSequence()
+                .filter { it.isRegularFile() && it.extension.equals("jar", ignoreCase = true) }
+                .toList()
+        }
+
+        if (jars.isEmpty()) {
+            logger.debug("No extension jars in {}", directory)
+            return
+        }
+
+        logger.info("Scanning {} extension jar(s) in {}", jars.size, directory)
+
+        for (jar in jars) {
+            try {
+                val loader = URLClassLoader(
+                    arrayOf(jar.toUri().toURL()),
+                    ExtensionProvider::class.java.classLoader,
+                )
+                jarLoaders += loader
+                absorb(loader, jar.fileName.toString())
+            } catch (e: Exception) {
+                logger.error("Failed to open extension jar {}", jar, e)
+            }
+        }
     }
 }
